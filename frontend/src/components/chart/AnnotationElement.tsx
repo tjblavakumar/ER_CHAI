@@ -7,6 +7,7 @@ interface AnnotationElementProps {
   chartArea: { x: number; y: number; width: number; height: number };
   yMin?: number;
   yMax?: number;
+  xLabels?: string[];
   draggable?: boolean;
   onDragEnd?: (id: string, x: number, y: number) => void;
   onContextMenu?: (id: string, x: number, y: number) => void;
@@ -20,11 +21,36 @@ function dashForStyle(style: string): number[] | undefined {
   }
 }
 
+/**
+ * Find the fractional x-position (0..1) for a date string within the xLabels array.
+ * Matches by prefix (e.g., "2020-01" matches "2020-01-01").
+ */
+function dateToFraction(dateStr: string, xLabels: string[]): number | null {
+  if (!dateStr || xLabels.length === 0) return null;
+  const needle = dateStr.trim();
+  const idx = xLabels.findIndex((lbl) => lbl.startsWith(needle) || needle.startsWith(lbl));
+  if (idx >= 0) return idx / Math.max(xLabels.length - 1, 1);
+  // Try parsing as date and finding closest
+  const target = new Date(needle).getTime();
+  if (isNaN(target)) return null;
+  let bestIdx = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < xLabels.length; i++) {
+    const t = new Date(xLabels[i]).getTime();
+    if (!isNaN(t)) {
+      const dist = Math.abs(t - target);
+      if (dist < bestDist) { bestDist = dist; bestIdx = i; }
+    }
+  }
+  return bestIdx / Math.max(xLabels.length - 1, 1);
+}
+
 const AnnotationElement: React.FC<AnnotationElementProps> = ({
   config,
   chartArea,
   yMin = 0,
   yMax = 100,
+  xLabels,
   draggable = true,
   onDragEnd,
   onContextMenu,
@@ -51,9 +77,7 @@ const AnnotationElement: React.FC<AnnotationElementProps> = ({
     return (
       <Group
         draggable={draggable}
-        onDragEnd={(e) => {
-          onDragEnd?.(elementId, e.target.x(), e.target.y());
-        }}
+        onDragEnd={(e) => onDragEnd?.(elementId, e.target.x(), e.target.y())}
       >
         <Line
           points={[chartArea.x, py, chartArea.x + chartArea.width, py]}
@@ -75,17 +99,29 @@ const AnnotationElement: React.FC<AnnotationElementProps> = ({
     );
   }
 
-  // Vertical band
+  // Vertical band — position from band_start/band_end dates when xLabels available
   if (config.type === 'vertical_band') {
-    const bandWidth = chartArea.width * 0.15;
+    let bandX = config.position.x;
+    let bandWidth = chartArea.width * 0.15;
+
+    if (xLabels && xLabels.length > 0 && config.band_start) {
+      const startFrac = dateToFraction(config.band_start, xLabels);
+      const endFrac = config.band_end
+        ? dateToFraction(config.band_end, xLabels)
+        : startFrac != null ? Math.min(startFrac + 0.05, 1) : null;
+
+      if (startFrac != null && endFrac != null) {
+        bandX = chartArea.x + startFrac * chartArea.width;
+        bandWidth = Math.max((endFrac - startFrac) * chartArea.width, 4);
+      }
+    }
+
     return (
       <Group
-        x={config.position.x}
+        x={bandX}
         y={chartArea.y}
         draggable={draggable}
-        onDragEnd={(e) => {
-          onDragEnd?.(elementId, e.target.x(), e.target.y());
-        }}
+        onDragEnd={(e) => onDragEnd?.(elementId, e.target.x(), e.target.y())}
       >
         <Rect
           width={bandWidth}
@@ -103,9 +139,7 @@ const AnnotationElement: React.FC<AnnotationElementProps> = ({
       x={config.position.x}
       y={config.position.y}
       draggable={draggable}
-      onDragEnd={(e) => {
-        onDragEnd?.(elementId, e.target.x(), e.target.y());
-      }}
+      onDragEnd={(e) => onDragEnd?.(elementId, e.target.x(), e.target.y())}
       onContextMenu={handleContextMenu}
     >
       <Text

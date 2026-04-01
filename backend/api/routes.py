@@ -260,3 +260,24 @@ async def delete_project(project_id: str):
     """Delete a project."""
     await _project_store.delete(project_id)
     return {"status": "deleted", "id": project_id}
+
+
+@router.post("/dataset/rows")
+async def get_dataset_rows(payload: dict):
+    """Load dataset rows from a CSV file path.
+
+    Expects JSON body: ``{"dataset_path": "data/file.csv"}``
+    """
+    import os
+    dataset_path = payload.get("dataset_path", "")
+    if not dataset_path or not os.path.exists(dataset_path):
+        return JSONResponse(
+            status_code=404,
+            content=ErrorResponse(
+                error="DATASET_NOT_FOUND",
+                message=f"Dataset file not found: {dataset_path}",
+            ).model_dump(),
+        )
+    df = pd.read_csv(dataset_path)
+    rows = df.where(df.notna(), None).to_dict(orient="records")
+    return {"rows": rows}

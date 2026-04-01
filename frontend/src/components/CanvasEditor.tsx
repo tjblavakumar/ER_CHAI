@@ -138,6 +138,43 @@ const CanvasEditor: React.FC = () => {
     return map;
   }, [chartState]);
 
+  // Filter datasetRows by x-axis date range (x_min/x_max) when they are date strings
+  const filteredRows = React.useMemo(() => {
+    if (!datasetRows || datasetRows.length === 0 || !chartState) return datasetRows;
+    const xMin = chartState.axes.x_min;
+    const xMax = chartState.axes.x_max;
+    if (xMin == null && xMax == null) return datasetRows;
+    // Only filter if x_min/x_max are strings (dates)
+    if (typeof xMin !== 'string' && typeof xMax !== 'string') return datasetRows;
+
+    // Find the date column
+    const firstRow = datasetRows[0];
+    const dateCol = Object.keys(firstRow).find((key) => {
+      const val = firstRow[key];
+      return typeof val === 'string' && isNaN(Number(val));
+    });
+    if (!dateCol) return datasetRows;
+
+    return datasetRows.filter((row) => {
+      const dateVal = String(row[dateCol] ?? '');
+      if (xMin != null && dateVal < String(xMin)) return false;
+      if (xMax != null && dateVal > String(xMax) + '-99') return false;
+      return true;
+    });
+  }, [datasetRows, chartState]);
+
+  // Recompute xLabels from filtered rows
+  const filteredXLabels = React.useMemo(() => {
+    if (!filteredRows || filteredRows.length === 0) return xLabels;
+    const firstRow = filteredRows[0];
+    const dateCol = Object.keys(firstRow).find((key) => {
+      const val = firstRow[key];
+      return typeof val === 'string' && isNaN(Number(val));
+    });
+    if (!dateCol) return xLabels;
+    return filteredRows.map((row) => String(row[dateCol] ?? ''));
+  }, [filteredRows, xLabels]);
+
   if (!chartState) {
     return (
       <div
@@ -193,14 +230,14 @@ const CanvasEditor: React.FC = () => {
             chartArea={CHART_AREA}
             yMin={yMin}
             yMax={yMax}
-            datasetRows={datasetRows}
+            datasetRows={filteredRows}
           />
 
           {/* Axes */}
           <AxisElement
             config={chartState.axes}
             chartArea={CHART_AREA}
-            xLabels={xLabels}
+            xLabels={filteredXLabels}
             onDragEnd={handleDragEnd}
             onContextMenu={handleContextMenu}
           />
@@ -231,6 +268,7 @@ const CanvasEditor: React.FC = () => {
                 chartArea={CHART_AREA}
                 yMin={yMin}
                 yMax={yMax}
+                xLabels={filteredXLabels}
                 onDragEnd={handleDragEnd}
                 onContextMenu={handleContextMenu}
               />
@@ -241,7 +279,7 @@ const CanvasEditor: React.FC = () => {
           {chartState.data_table && (
             <DataTableElement
               config={{ ...chartState.data_table, position: dataTablePos }}
-              datasetRows={datasetRows}
+              datasetRows={filteredRows}
               seriesLabels={seriesLabels}
               onDragEnd={handleDragEnd}
               onContextMenu={handleContextMenu}

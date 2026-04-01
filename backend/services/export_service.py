@@ -295,6 +295,40 @@ def _render_chart_image(chart_state: ChartState, df: pd.DataFrame) -> bytes:
     """Render the chart to a PNG image in memory at 300 DPI."""
     fig, ax = plt.subplots(figsize=(10, 6))
 
+    # Detect and parse date column for x-axis
+    date_col = None
+    x_values = df.index
+    for col in df.columns:
+        if not pd.api.types.is_numeric_dtype(df[col]):
+            try:
+                parsed = pd.to_datetime(df[col], errors="coerce", format="mixed")
+                if parsed.notna().sum() > len(df) * 0.5:
+                    date_col = col
+                    x_values = parsed
+                    break
+            except Exception:
+                pass
+
+    # Filter by x_min/x_max if they are date strings
+    mask = pd.Series([True] * len(df), index=df.index)
+    x_min = chart_state.axes.x_min
+    x_max = chart_state.axes.x_max
+    if date_col and isinstance(x_min, str):
+        try:
+            mask &= pd.to_datetime(df[date_col], errors="coerce") >= pd.Timestamp(x_min)
+        except Exception:
+            pass
+    if date_col and isinstance(x_max, str):
+        try:
+            mask &= pd.to_datetime(df[date_col], errors="coerce") <= pd.Timestamp(x_max)
+        except Exception:
+            pass
+    df_filtered = df[mask].reset_index(drop=True)
+    if date_col:
+        x_values = pd.to_datetime(df_filtered[date_col], errors="coerce", format="mixed")
+    else:
+        x_values = df_filtered.index
+
     # Title
     ax.set_title(
         chart_state.title.text,
@@ -307,20 +341,39 @@ def _render_chart_image(chart_state: ChartState, df: pd.DataFrame) -> bytes:
     # Scale
     if chart_state.axes.y_scale == "logarithmic":
         ax.set_yscale("log")
-    if chart_state.axes.x_scale == "logarithmic":
-        ax.set_xscale("log")
 
     # Series
     for s in chart_state.series:
         if not s.visible:
             continue
         col = s.column
-        if col not in df.columns:
+        if col not in df_filtered.columns:
             continue
+        y_data = pd.to_numeric(df_filtered[col], errors="coerce")
         if s.chart_type == "bar":
-            ax.bar(df.index, df[col], color=s.color, label=s.name, width=0.8)
+            ax.bar(x_values, y_data, color=s.color, label=s.name, width=20)
+        elif s.chart_type == "area":
+            ax.fill_between(x_values, y_data, alpha=0.3, color=s.color, label=s.name)
+            ax.plot(x_values, y_data, color=s.color, linewidth=s.line_width)
         else:
-            ax.plot(df.index, df[col], color=s.color, label=s.name, linewidth=s.line_width)
+            ax.plot(x_values, y_data, color=s.color, label=s.name, linewidth=s.line_width)
+
+    # Horizontal line annotations
+    for ann in chart_state.annotations:
+        if ann.type == "horizontal_line" and ann.line_value is not None:
+            style_map_ann = {"dashed": "--", "dotted": ":", "solid": "-"}
+            ls = style_map_ann.get(ann.line_style, ":")
+            ax.axhline(y=ann.line_value, color=ann.line_color, linestyle=ls,
+                       linewidth=ann.line_width, label=ann.text or None)
+
+    # Vertical band annotations
+    for ann in chart_state.annotations:
+        if ann.type == "vertical_band" and ann.band_start and ann.band_end:
+            try:
+                ax.axvspan(pd.Timestamp(ann.band_start), pd.Timestamp(ann.band_end),
+                           alpha=0.3, color=ann.band_color or "#cccccc")
+            except Exception:
+                pass
 
     # Gridlines
     style_map = {"dashed": "--", "dotted": ":", "solid": "-"}
@@ -331,16 +384,22 @@ def _render_chart_image(chart_state: ChartState, df: pd.DataFrame) -> bytes:
         ls = style_map.get(chart_state.gridlines.style, "--")
         ax.xaxis.grid(True, linestyle=ls, color=chart_state.gridlines.color)
 
-    # Axis limits
-    if chart_state.axes.x_min is not None and chart_state.axes.x_max is not None:
-        ax.set_xlim(chart_state.axes.x_min, chart_state.axes.x_max)
+    # Y-axis limits
     if chart_state.axes.y_min is not None and chart_state.axes.y_max is not None:
-        ax.set_ylim(chart_state.axes.y_min, chart_state.axes.y_max)
+        ax.set_ylim(float(chart_state.axes.y_min), float(chart_state.axes.y_max))
+
+    # Y-axis format
+    y_fmt = getattr(chart_state.axes, 'y_format', 'auto')
+    if y_fmt == "percent":
+        ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:.0f}%"))
+    elif y_fmt == "integer":
+        ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:.0f}"))
 
     # Legend
     if chart_state.legend.visible and chart_state.series:
         ax.legend(loc="best")
 
+    fig.autofmt_xdate()
     plt.tight_layout()
 
     buf = io.BytesIO()

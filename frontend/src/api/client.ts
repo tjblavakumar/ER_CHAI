@@ -152,3 +152,13 @@ export async function updateProject(
 export async function deleteProject(projectId: string): Promise<void> {
   await api.delete(`/projects/${projectId}`);
 }
+
+export async function loadDatasetRows(
+  datasetPath: string,
+): Promise<Record<string, unknown>[]> {
+  const { data } = await api.post<{ rows: Record<string, unknown>[] }>(
+    '/dataset/rows',
+    { dataset_path: datasetPath },
+  );
+  return data.rows;
+}

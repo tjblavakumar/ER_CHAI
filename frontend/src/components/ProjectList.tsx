@@ -6,6 +6,7 @@ import {
   createProject,
   updateProject,
   deleteProject,
+  loadDatasetRows,
 } from '../api/client';
 
 const ProjectList: React.FC = () => {
@@ -17,6 +18,7 @@ const ProjectList: React.FC = () => {
   const setChartState = useAppStore((s) => s.setChartState);
   const setSummaryText = useAppStore((s) => s.setSummaryText);
   const setDatasetInfo = useAppStore((s) => s.setDatasetInfo);
+  const setDatasetRows = useAppStore((s) => s.setDatasetRows);
   const summaryText = useAppStore((s) => s.summaryText);
   const resetForNewChart = useAppStore((s) => s.resetForNewChart);
 
@@ -43,6 +45,13 @@ const ProjectList: React.FC = () => {
       setSummaryText(project.summary_text);
       setCurrentProjectId(project.id);
       setDatasetInfo(null);
+      // Reload dataset rows from the saved CSV
+      try {
+        const rows = await loadDatasetRows(project.dataset_path);
+        setDatasetRows(rows);
+      } catch {
+        setDatasetRows(null);
+      }
     } catch {
       // Error toast handled by API interceptor
     }

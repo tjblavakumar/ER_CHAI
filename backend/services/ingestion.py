@@ -115,12 +115,17 @@ class DataIngestionService:
             dataset=dataset,
             dataset_path=dataset_path,
             columns=list(df.columns),
+            df=df,
         )
+
+        # Include actual data rows for frontend rendering
+        dataset_rows = df.where(df.notna(), None).to_dict(orient="records")
 
         return IngestionResult(
             dataset_path=dataset_path,
             chart_state=chart_state,
             dataset_info=dataset_info,
+            dataset_rows=dataset_rows,
         )
 
     async def ingest_from_file(
@@ -251,17 +256,28 @@ def _build_default_chart_state(
     dataset: object,
     dataset_path: str,
     columns: list[str],
+    df: pd.DataFrame | None = None,
 ) -> ChartState:
-    """Create a default FRBSF-branded ``ChartState`` from a FRED dataset.
-
-    Uses line chart, FRBSF blue palette, proper axis labels derived from
-    the dataset metadata, default legend, gridlines, and title.
-    """
-    from backend.models.schemas import FREDDataset  # local to avoid circular at module level
+    """Create a default FRBSF-branded ``ChartState`` from a FRED dataset."""
+    from backend.models.schemas import FREDDataset
 
     assert isinstance(dataset, FREDDataset)
 
     primary_color = FRBSF_COLORS[0]
+
+    # Compute y-axis range from actual data
+    y_min_val: float | None = None
+    y_max_val: float | None = None
+    if df is not None and "value" in df.columns:
+        numeric_vals = pd.to_numeric(df["value"], errors="coerce").dropna()
+        if len(numeric_vals) > 0:
+            y_min_val = float(numeric_vals.min())
+            y_max_val = float(numeric_vals.max())
+            # Add 5% padding
+            y_range = y_max_val - y_min_val
+            if y_range > 0:
+                y_min_val -= y_range * 0.05
+                y_max_val += y_range * 0.05
 
     title = ChartElementState(
         text=dataset.title,
@@ -276,6 +292,8 @@ def _build_default_chart_state(
         y_label=dataset.units or "Value",
         x_scale="linear",
         y_scale="linear",
+        y_min=y_min_val,
+        y_max=y_max_val,
     )
 
     series = [

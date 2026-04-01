@@ -16,15 +16,37 @@ function buildChartContext(chartState: ChartState): ChartContext {
 }
 
 function applyDelta(state: ChartState, delta: ChartConfigDelta): ChartState {
+  // Merge annotations: append new ones, update existing by id
+  let mergedAnnotations = state.annotations;
+  if (delta.annotations != null) {
+    const existingIds = new Set(state.annotations.map((a) => a.id));
+    const updated = state.annotations.map((existing) => {
+      const replacement = delta.annotations!.find((d) => d.id === existing.id);
+      return replacement ?? existing;
+    });
+    const newOnes = delta.annotations.filter((d) => !existingIds.has(d.id));
+    mergedAnnotations = [...updated, ...newOnes];
+  }
+
+  // When global chart_type changes, propagate to all series
+  const newChartType = delta.chart_type ?? state.chart_type;
+  let mergedSeries = delta.series ?? state.series;
+  if (delta.chart_type != null && delta.chart_type !== state.chart_type && !delta.series) {
+    mergedSeries = state.series.map((s) => ({
+      ...s,
+      chart_type: delta.chart_type!,
+    }));
+  }
+
   return {
     ...state,
-    ...(delta.chart_type != null && { chart_type: delta.chart_type }),
+    chart_type: newChartType,
     ...(delta.title != null && { title: delta.title }),
     ...(delta.axes != null && { axes: delta.axes }),
-    ...(delta.series != null && { series: delta.series }),
+    series: mergedSeries,
     ...(delta.legend != null && { legend: delta.legend }),
     ...(delta.gridlines != null && { gridlines: delta.gridlines }),
-    ...(delta.annotations != null && { annotations: delta.annotations }),
+    annotations: mergedAnnotations,
     ...(delta.data_table !== undefined && { data_table: delta.data_table }),
   };
 }

@@ -181,7 +181,12 @@ class AIAssistantHandler:
             '- "horizontal_line": dotted line across chart at a Y value. '
             "Use line_value for the Y value, line_color, line_style (dotted/dashed/solid), line_width.\n"
             'Example: {"annotations": [{"type": "horizontal_line", "line_value": 2.0, '
-            '"text": "Target 2%", "line_color": "#cc0000", "line_style": "dotted"}]}\n\n'
+            '"text": "Target 2%", "line_color": "#cc0000", "line_style": "dotted"}]}\n'
+            "IMPORTANT: When adding annotations, include ONLY the NEW annotation(s) "
+            "in the annotations array. Do NOT include existing annotations — they will "
+            "be preserved automatically. Each annotation needs a unique id.\n\n"
+            "CHART TYPE: When changing chart_type to 'area', set chart_type at the top level. "
+            "The system will automatically propagate it to all series.\n\n"
             "IMPORTANT: If you include 'series' in the delta, each series object "
             "MUST include ALL required fields: name, column, chart_type, color, "
             "line_width, visible. Copy unchanged fields from the current chart state.\n\n"

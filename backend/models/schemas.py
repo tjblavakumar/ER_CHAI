@@ -172,8 +172,8 @@ class ChartElementState(BaseModel):
 class AxesConfig(BaseModel):
     x_label: str
     y_label: str
-    x_min: float | None = None
-    x_max: float | None = None
+    x_min: float | str | None = None
+    x_max: float | str | None = None
     y_min: float | None = None
     y_max: float | None = None
     x_scale: str = "linear"  # "linear" | "logarithmic"

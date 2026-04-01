@@ -18,8 +18,8 @@ export interface ChartElementState {
 export interface AxesConfig {
   x_label: string;
   y_label: string;
-  x_min: number | null;
-  x_max: number | null;
+  x_min: number | string | null;
+  x_max: number | string | null;
   y_min: number | null;
   y_max: number | null;
   x_scale: string;
