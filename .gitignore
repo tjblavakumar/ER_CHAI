@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# Data & DB
+data/
+*.db
+projects.db
+
+# Config with secrets
+config.yaml
+
+# Test/cache
+.pytest_cache/
+.hypothesis/
+htmlcov/
+.coverage
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Frontend build
+frontend/node_modules/
+frontend/dist/
