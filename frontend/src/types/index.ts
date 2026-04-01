@@ -1,0 +1,176 @@
+// TypeScript types mirroring backend Pydantic models (backend/models/schemas.py)
+
+// --- Chart Configuration ---
+
+export interface Position {
+  x: number;
+  y: number;
+}
+
+export interface ChartElementState {
+  text: string;
+  font_family: string;
+  font_size: number;
+  font_color: string;
+  position: Position;
+}
+
+export interface AxesConfig {
+  x_label: string;
+  y_label: string;
+  x_min: number | null;
+  x_max: number | null;
+  y_min: number | null;
+  y_max: number | null;
+  x_scale: string; // "linear" | "logarithmic"
+  y_scale: string;
+}
+
+export interface SeriesConfig {
+  name: string;
+  column: string;
+  chart_type: string; // "line" | "bar"
+  color: string;
+  line_width: number;
+  visible: boolean;
+}
+
+export interface LegendEntry {
+  label: string;
+  color: string;
+  series_name: string;
+}
+
+export interface LegendConfig {
+  visible: boolean;
+  position: Position;
+  entries: LegendEntry[];
+}
+
+export interface GridlineConfig {
+  horizontal_visible: boolean;
+  vertical_visible: boolean;
+  style: string; // "solid" | "dashed" | "dotted"
+  color: string;
+}
+
+export interface AnnotationConfig {
+  id: string;
+  type: string; // "text" | "vertical_band"
+  text: string | null;
+  position: Position;
+  font_size: number;
+  font_color: string;
+  band_start: string | null;
+  band_end: string | null;
+  band_color: string | null;
+}
+
+export interface DataTableConfig {
+  visible: boolean;
+  position: Position;
+  columns: string[];
+  font_size: number;
+}
+
+export interface ChartState {
+  chart_type: string; // "line" | "bar" | "mixed"
+  title: ChartElementState;
+  axes: AxesConfig;
+  series: SeriesConfig[];
+  legend: LegendConfig;
+  gridlines: GridlineConfig;
+  annotations: AnnotationConfig[];
+  data_table: DataTableConfig | null;
+  elements_positions: Record<string, Position>;
+  dataset_path: string;
+  dataset_columns: string[];
+}
+
+// --- AI ---
+
+export interface ChartConfigDelta {
+  chart_type?: string | null;
+  title?: ChartElementState | null;
+  axes?: AxesConfig | null;
+  series?: SeriesConfig[] | null;
+  legend?: LegendConfig | null;
+  gridlines?: GridlineConfig | null;
+  annotations?: AnnotationConfig[] | null;
+  data_table?: DataTableConfig | null;
+}
+
+export interface ChartContext {
+  chart_state: ChartState;
+  dataset_summary: string;
+  dataset_sample: Record<string, unknown>[];
+}
+
+export interface AIResponse {
+  type: string; // "chart_modify" | "data_qa"
+  message: string;
+  chart_delta: ChartConfigDelta | null;
+}
+
+// --- Project ---
+
+export interface Project {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+  chart_state: ChartState;
+  dataset_path: string;
+  summary_text: string;
+}
+
+export interface ProjectCreate {
+  name: string;
+  chart_state: ChartState;
+  dataset_path: string;
+  summary_text?: string;
+}
+
+export interface ProjectUpdate {
+  name?: string | null;
+  chart_state?: ChartState | null;
+  summary_text?: string | null;
+}
+
+export interface ProjectSummary {
+  id: string;
+  name: string;
+  updated_at: string;
+}
+
+// --- Ingestion ---
+
+export interface DatasetInfo {
+  columns: string[];
+  row_count: number;
+  date_range: string | null;
+  source: string; // "fred" | "upload"
+}
+
+export interface IngestionResult {
+  dataset_path: string;
+  chart_state: ChartState;
+  dataset_info: DatasetInfo;
+}
+
+// --- Error ---
+
+export interface ErrorResponse {
+  error: string;
+  message: string;
+  details?: Record<string, unknown> | null;
+}
+
+// --- Frontend-only: Chat UI ---
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  chartDelta?: ChartConfigDelta;
+  timestamp: string;
+}

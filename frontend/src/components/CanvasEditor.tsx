@@ -1,0 +1,213 @@
+import React, { useCallback } from 'react';
+import { Stage, Layer } from 'react-konva';
+import { useAppStore } from '../store/appStore';
+import TitleElement from './chart/TitleElement';
+import AxisElement from './chart/AxisElement';
+import DataSeriesElement from './chart/DataSeriesElement';
+import LegendElement from './chart/LegendElement';
+import GridlineElement from './chart/GridlineElement';
+import AnnotationElement from './chart/AnnotationElement';
+import DataTableElement from './chart/DataTableElement';
+import ContextMenu from './ContextMenu';
+import type { ChartState, Position } from '../types';
+
+// Canvas dimensions
+const STAGE_WIDTH = 860;
+const STAGE_HEIGHT = 560;
+
+// Chart area with margins
+const MARGIN = { top: 50, right: 30, bottom: 60, left: 70 };
+const CHART_AREA = {
+  x: MARGIN.left,
+  y: MARGIN.top,
+  width: STAGE_WIDTH - MARGIN.left - MARGIN.right,
+  height: STAGE_HEIGHT - MARGIN.top - MARGIN.bottom - 80, // leave room for data table
+};
+
+const CanvasEditor: React.FC = () => {
+  const chartState = useAppStore((s) => s.chartState);
+  const setChartState = useAppStore((s) => s.setChartState);
+  const setContextMenuTarget = useAppStore((s) => s.setContextMenuTarget);
+
+  /**
+   * Persist new position to chart state on drag end (Req 7.3).
+   */
+  const handleDragEnd = useCallback(
+    (elementId: string, x: number, y: number) => {
+      if (!chartState) return;
+      const updated: ChartState = {
+        ...chartState,
+        elements_positions: {
+          ...chartState.elements_positions,
+          [elementId]: { x, y },
+        },
+      };
+
+      // Also update the canonical position on known elements
+      if (elementId === 'title') {
+        updated.title = { ...chartState.title, position: { x, y } };
+      } else if (elementId === 'legend') {
+        updated.legend = { ...chartState.legend, position: { x, y } };
+      } else if (elementId === 'data_table' && chartState.data_table) {
+        updated.data_table = { ...chartState.data_table, position: { x, y } };
+      } else if (elementId.startsWith('annotation_')) {
+        const annId = elementId.replace('annotation_', '');
+        updated.annotations = chartState.annotations.map((a) =>
+          a.id === annId ? { ...a, position: { x, y } } : a,
+        );
+      }
+
+      setChartState(updated);
+    },
+    [chartState, setChartState],
+  );
+
+  /**
+   * Show context menu on right-click over text elements (Req 8.1).
+   */
+  const handleContextMenu = useCallback(
+    (elementId: string, x: number, y: number) => {
+      setContextMenuTarget({ elementId, x, y });
+    },
+    [setContextMenuTarget],
+  );
+
+  /**
+   * Apply font property changes from context menu (Req 8.2).
+   */
+  const handleApplyChange = useCallback(
+    (elementId: string, property: string, value: string | number) => {
+      if (!chartState) return;
+      const updated = { ...chartState };
+
+      if (elementId === 'title') {
+        updated.title = { ...chartState.title, [property]: value };
+      } else if (elementId.startsWith('annotation_')) {
+        const annId = elementId.replace('annotation_', '');
+        updated.annotations = chartState.annotations.map((a) =>
+          a.id === annId ? { ...a, [property]: value } : a,
+        );
+      } else if (elementId === 'data_table' && chartState.data_table) {
+        if (property === 'font_size') {
+          updated.data_table = { ...chartState.data_table, font_size: value as number };
+        }
+      }
+
+      setChartState(updated);
+      setContextMenuTarget(null);
+    },
+    [chartState, setChartState, setContextMenuTarget],
+  );
+
+  if (!chartState) {
+    return (
+      <div
+        style={{
+          width: STAGE_WIDTH,
+          height: STAGE_HEIGHT,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#f5f5f5',
+          border: '1px dashed #ccc',
+          borderRadius: 4,
+          color: '#999',
+          fontSize: 14,
+        }}
+      >
+        Load or create a chart to get started
+      </div>
+    );
+  }
+
+  const yMin = chartState.axes.y_min ?? 0;
+  const yMax = chartState.axes.y_max ?? 100;
+
+  // Resolve positions from elements_positions or use defaults
+  const resolvePos = (id: string, fallback: Position): Position =>
+    chartState.elements_positions[id] ?? fallback;
+
+  const titlePos = resolvePos('title', chartState.title.position);
+  const legendPos = resolvePos('legend', chartState.legend.position);
+  const dataTablePos = chartState.data_table
+    ? resolvePos('data_table', chartState.data_table.position)
+    : { x: MARGIN.left, y: STAGE_HEIGHT - 70 };
+
+  return (
+    <div style={{ position: 'relative', display: 'inline-block' }}>
+      <Stage
+        width={STAGE_WIDTH}
+        height={STAGE_HEIGHT}
+        style={{ background: '#ffffff', border: '1px solid #ddd' }}
+      >
+        <Layer>
+          {/* Gridlines (behind data) */}
+          <GridlineElement
+            config={chartState.gridlines}
+            chartArea={CHART_AREA}
+            onDragEnd={handleDragEnd}
+          />
+
+          {/* Data series */}
+          <DataSeriesElement
+            series={chartState.series}
+            chartArea={CHART_AREA}
+            yMin={yMin}
+            yMax={yMax}
+          />
+
+          {/* Axes */}
+          <AxisElement
+            config={chartState.axes}
+            chartArea={CHART_AREA}
+            onDragEnd={handleDragEnd}
+            onContextMenu={handleContextMenu}
+          />
+
+          {/* Title */}
+          <TitleElement
+            config={{ ...chartState.title, position: titlePos }}
+            elementId="title"
+            onDragEnd={handleDragEnd}
+            onContextMenu={handleContextMenu}
+          />
+
+          {/* Legend */}
+          <LegendElement
+            config={{ ...chartState.legend, position: legendPos }}
+            onDragEnd={handleDragEnd}
+            onContextMenu={handleContextMenu}
+          />
+
+          {/* Annotations */}
+          {chartState.annotations.map((ann) => {
+            const annPos = resolvePos(`annotation_${ann.id}`, ann.position);
+            return (
+              <AnnotationElement
+                key={ann.id}
+                config={{ ...ann, position: annPos }}
+                chartArea={CHART_AREA}
+                onDragEnd={handleDragEnd}
+                onContextMenu={handleContextMenu}
+              />
+            );
+          })}
+
+          {/* Data Table */}
+          {chartState.data_table && (
+            <DataTableElement
+              config={{ ...chartState.data_table, position: dataTablePos }}
+              onDragEnd={handleDragEnd}
+              onContextMenu={handleContextMenu}
+            />
+          )}
+        </Layer>
+      </Stage>
+
+      {/* Context Menu (HTML overlay) */}
+      <ContextMenu onApplyChange={handleApplyChange} />
+    </div>
+  );
+};
+
+export default CanvasEditor;

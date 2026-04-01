@@ -202,51 +202,51 @@ Incremental implementation of the FRBSF Chart Builder, starting with backend dat
 - [x] 14. Checkpoint - Ensure backend is fully functional
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 15. Frontend scaffolding and state management
-  - [ ] 15.1 Set up React project with dependencies
+- [x] 15. Frontend scaffolding and state management
+  - [x] 15.1 Set up React project with dependencies
     - Initialize React project with TypeScript, Konva.js (`react-konva`, `konva`), zustand for state management, axios for HTTP
     - Create directory structure: `src/components/`, `src/store/`, `src/api/`, `src/types/`
     - _Requirements: 6.1_
 
-  - [ ] 15.2 Define TypeScript types and API client
+  - [x] 15.2 Define TypeScript types and API client
     - Create `src/types/index.ts` with all frontend types matching backend models: `ChartState`, `ChartConfigDelta`, `ProjectSummary`, `ChatMessage`, `DatasetInfo`, etc.
     - Create `src/api/client.ts` with axios-based API client for all backend endpoints
     - Implement centralized error handler displaying toast notifications
     - _Requirements: 2.5, 3.4, 4.3_
 
-  - [ ] 15.3 Implement Zustand store (`src/store/appStore.ts`)
+  - [x] 15.3 Implement Zustand store (`src/store/appStore.ts`)
     - Define `AppState` with project, chart, data, AI chat, summary, and UI state
     - Implement chart history (undo stack) with `chartHistory` and `historyIndex`
     - _Requirements: 2.2, 7.3, 11.3_
 
-- [ ] 16. Canvas Editor and chart rendering
-  - [ ] 16.1 Implement Canvas Editor (`src/components/CanvasEditor.tsx`)
+- [x] 16. Canvas Editor and chart rendering
+  - [x] 16.1 Implement Canvas Editor (`src/components/CanvasEditor.tsx`)
     - Create Konva.js `Stage` and `Layer` components
     - Render chart elements as individual Konva nodes based on `ChartState`
     - Re-render affected elements within 500ms on chart config changes
     - _Requirements: 6.1, 6.4_
 
-  - [ ] 16.2 Implement chart element components
+  - [x] 16.2 Implement chart element components
     - Create `AxisElement`, `DataSeriesElement`, `LegendElement`, `GridlineElement`, `AnnotationElement`, `DataTableElement`, `TitleElement` as React-Konva components
     - Support line charts, bar charts, and mixed chart styles
     - Apply FRBSF branding styles (colors, fonts, layout) as defaults
     - _Requirements: 6.1, 6.2, 6.3_
 
-  - [ ] 16.3 Implement drag-and-drop for all chart elements
+  - [x] 16.3 Implement drag-and-drop for all chart elements
     - Make all chart elements draggable (legends, axis labels, annotations, data table, title, gridlines)
     - Update element position in real time during drag
     - Persist new position to chart state on drag end
     - _Requirements: 7.1, 7.2, 7.3_
 
-  - [ ] 16.4 Implement Context Menu (`src/components/ContextMenu.tsx`)
+  - [x] 16.4 Implement Context Menu (`src/components/ContextMenu.tsx`)
     - Show floating context menu on right-click over text-based chart elements
     - Provide options for font size, font color, font family
     - Apply changes immediately on selection
     - Close on outside click
     - _Requirements: 8.1, 8.2, 8.3_
 
-- [ ] 17. Controls Panel and manual customization
-  - [ ] 17.1 Implement Controls Panel (`src/components/ControlsPanel.tsx`)
+- [x] 17. Controls Panel and manual customization
+  - [x] 17.1 Implement Controls Panel (`src/components/ControlsPanel.tsx`)
     - Axis controls: labels, ranges (min/max), scales (linear, logarithmic)
     - Chart type selector: line, bar, mixed
     - Series color pickers
@@ -258,8 +258,8 @@ Incremental implementation of the FRBSF Chart Builder, starting with backend dat
     - Apply changes to canvas immediately on value change
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
 
-- [ ] 18. AI Chat interface
-  - [ ] 18.1 Implement AI Chat Window (`src/components/AIChatWindow.tsx`)
+- [x] 18. AI Chat interface
+  - [x] 18.1 Implement AI Chat Window (`src/components/AIChatWindow.tsx`)
     - Floating AI assistant icon in bottom-right corner
     - Click to open chat window overlay
     - Message list with user/assistant messages
@@ -268,46 +268,46 @@ Incremental implementation of the FRBSF Chart Builder, starting with backend dat
     - Display undo button for last AI-driven chart modification
     - _Requirements: 10.1, 10.2, 10.3, 11.2, 11.3_
 
-  - [ ] 18.2 Wire AI chat to chart state
+  - [x] 18.2 Wire AI chat to chart state
     - On `chart_modify` response, apply `ChartConfigDelta` to chart state and push previous state to undo stack
     - On `data_qa` response, display text answer in chat
     - Reset AI session on new chart create/load
     - _Requirements: 10.4, 10.5, 11.1, 11.2, 11.3, 13.1, 13.2_
 
-- [ ] 19. Summary Editor and Project List
-  - [ ] 19.1 Implement Summary Editor (`src/components/SummaryEditor.tsx`)
+- [x] 19. Summary Editor and Project List
+  - [x] 19.1 Implement Summary Editor (`src/components/SummaryEditor.tsx`)
     - Editable text area below the chart section
     - Display auto-generated summary
     - Persist user edits as current summary for the project
     - _Requirements: 12.4, 12.5_
 
-  - [ ] 19.2 Implement Project List (`src/components/ProjectList.tsx`)
+  - [x] 19.2 Implement Project List (`src/components/ProjectList.tsx`)
     - Sidebar list showing saved projects with name and last-modified timestamp
     - Click to load project (restore chart state, dataset, metadata to canvas)
     - Delete button per entry
     - Save action to persist current chart state, dataset, and metadata
     - _Requirements: 2.1, 2.2, 2.4, 2.5_
 
-- [ ] 20. Export Toolbar
-  - [ ] 20.1 Implement Export Toolbar (`src/components/ExportToolbar.tsx`)
+- [x] 20. Export Toolbar
+  - [x] 20.1 Implement Export Toolbar (`src/components/ExportToolbar.tsx`)
     - Buttons for Python, R, and PDF export
     - Trigger download of zip/PDF on click via backend export endpoints
     - _Requirements: 14.1, 15.1, 16.1_
 
-- [ ] 21. App Shell and integration wiring
-  - [ ] 21.1 Implement App Shell (`src/components/App.tsx`)
+- [x] 21. App Shell and integration wiring
+  - [x] 21.1 Implement App Shell (`src/components/App.tsx`)
     - Top-level layout: project list sidebar, main canvas area, controls panel, summary editor, export toolbar, AI chat overlay
     - Wire all components to Zustand store
     - Implement network error persistent banner
     - _Requirements: 6.1, 9.1, 10.1, 12.4, 2.5_
 
-  - [ ] 21.2 Wire data ingestion flows end-to-end
+  - [x] 21.2 Wire data ingestion flows end-to-end
     - FRED URL input → backend ingestion → chart rendered on canvas
     - File upload (CSV/Excel + optional reference image) → backend ingestion → chart rendered on canvas
     - Auto-generate executive summary on chart creation/update
     - _Requirements: 3.1, 3.2, 3.3, 4.1, 4.2, 4.5, 5.5, 12.1_
 
-- [ ] 22. Final checkpoint - Ensure all tests pass
+- [x] 22. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes
