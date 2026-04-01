@@ -8,7 +8,7 @@ const FONT_COLORS = [
   '#003366', '#006699', '#0099cc', '#cc0000',
   '#cc6600', '#339933', '#663399', '#ffffff',
 ];
-const FONT_FAMILIES = ['Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Courier New', 'Verdana'];
+const FONT_FAMILIES = ['Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Courier New', 'Verdana', 'Greycliff CF'];
 
 interface ContextMenuProps {
   onApplyChange: (elementId: string, property: string, value: string | number) => void;
@@ -47,6 +47,10 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ onApplyChange }) => {
   if (!contextMenuTarget || !chartState) return null;
 
   const currentElement = resolveElement(chartState, contextMenuTarget.elementId);
+  const isLegendEntry = contextMenuTarget.elementId.startsWith('legend_entry_');
+  const legendEntryLabel = isLegendEntry
+    ? resolveLegendLabel(chartState, contextMenuTarget.elementId)
+    : null;
 
   return (
     <div
@@ -69,6 +73,21 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ onApplyChange }) => {
       <div style={{ fontWeight: 'bold', marginBottom: 8, color: '#333' }}>
         Text Properties
       </div>
+
+      {/* Legend entry label rename */}
+      {isLegendEntry && (
+        <div style={{ marginBottom: 8 }}>
+          <label style={labelStyle}>Label</label>
+          <input
+            type="text"
+            value={legendEntryLabel ?? ''}
+            onChange={(e) =>
+              onApplyChange(contextMenuTarget.elementId, 'label', e.target.value)
+            }
+            style={inputStyle}
+          />
+        </div>
+      )}
 
       {/* Font Size */}
       <div style={{ marginBottom: 8 }}>
@@ -143,6 +162,15 @@ const selectStyle: React.CSSProperties = {
   fontSize: 13,
 };
 
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '4px 6px',
+  border: '1px solid #ccc',
+  borderRadius: 4,
+  fontSize: 13,
+  boxSizing: 'border-box',
+};
+
 /**
  * Resolve the current font properties for a given element ID from the chart state.
  */
@@ -173,7 +201,28 @@ function resolveElement(
       return { font_size: ann.font_size, font_color: ann.font_color, font_family: 'Arial' };
     }
   }
+  if (elementId.startsWith('legend_entry_')) {
+    const seriesName = elementId.replace('legend_entry_', '');
+    const entry = chartState.legend.entries.find((e) => e.series_name === seriesName);
+    if (entry) {
+      return {
+        font_size: entry.font_size ?? 11,
+        font_color: entry.font_color ?? '#333333',
+        font_family: entry.font_family ?? 'Arial',
+      };
+    }
+    return { font_size: 11, font_color: '#333333', font_family: 'Arial' };
+  }
   return null;
+}
+
+/**
+ * Resolve the current label for a legend entry element.
+ */
+function resolveLegendLabel(chartState: ChartState, elementId: string): string | null {
+  const seriesName = elementId.replace('legend_entry_', '');
+  const entry = chartState.legend.entries.find((e) => e.series_name === seriesName);
+  return entry?.label ?? null;
 }
 
 export default ContextMenu;

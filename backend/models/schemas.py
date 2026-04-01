@@ -13,6 +13,7 @@ class AppConfig(BaseModel):
     aws_region: str
     aws_access_key_id: str | None = None
     aws_secret_access_key: str | None = None
+    aws_session_token: str | None = None
     bedrock_model_id: str = "anthropic.claude-3-sonnet-20240229-v1:0"
     bedrock_vision_model_id: str = "anthropic.claude-3-sonnet-20240229-v1:0"
 
@@ -69,6 +70,9 @@ class LegendEntry(BaseModel):
     label: str
     color: str
     series_name: str
+    font_size: int = 11
+    font_color: str = "#333333"
+    font_family: str = "Arial"
 
 
 class AnnotationSpec(BaseModel):
@@ -116,12 +120,26 @@ class OpenCVResult(BaseModel):
 
 
 class VisionResult(BaseModel):
-    chart_type: str  # "line", "bar", "mixed"
+    chart_type: str  # "line", "bar", "mixed", "area"
+    title: str = ""
+    title_font_size: int = 16
+    title_color: str = "#003B5C"
     axis_config: AxisConfig
+    y_format: str = "auto"  # "auto" | "integer" | "percent" | "decimal1" | "decimal2"
+    axis_line_width: float = 1.0
+    tick_font_size: int = 10
     legend_entries: list[LegendEntry]
+    legend_position: str = "inline"  # "inline" | "top" | "bottom" | "right"
+    gridline_style: str = "dashed"  # "solid" | "dashed" | "dotted" | "none"
+    gridline_color: str = "#D1D3D4"
     annotations: list[AnnotationSpec]
+    horizontal_lines: list[dict] = []  # [{"value": 2.0, "label": "2%", "color": "#cc0000", "style": "dotted"}]
+    vertical_bands: list[dict] = []  # [{"start": "2020-01", "end": "2020-06", "color": "#cccccc"}]
     data_table: DataTableSpec | None = None
     layout_description: str
+    background_color: str = "#ffffff"
+    series_line_widths: list[float] = []  # line width per series
+    series_line_styles: list[str] = []  # "solid" | "dashed" | "dotted" per series
 
 
 class ChartSpecification(BaseModel):
@@ -160,6 +178,10 @@ class AxesConfig(BaseModel):
     y_max: float | None = None
     x_scale: str = "linear"  # "linear" | "logarithmic"
     y_scale: str = "linear"
+    y_format: str = "auto"  # "auto" | "integer" | "percent" | "decimal1" | "decimal2"
+    line_width: float = 1.0  # axis line thickness
+    tick_font_size: int = 10  # font size for tick labels
+    label_font_size: int = 12  # font size for axis labels
 
 
 class SeriesConfig(BaseModel):
@@ -186,7 +208,7 @@ class GridlineConfig(BaseModel):
 
 class AnnotationConfig(BaseModel):
     id: str
-    type: str  # "text" | "vertical_band"
+    type: str  # "text" | "vertical_band" | "horizontal_line"
     text: str | None = None
     position: Position
     font_size: int = 10
@@ -194,6 +216,10 @@ class AnnotationConfig(BaseModel):
     band_start: str | None = None  # date for vertical bands
     band_end: str | None = None
     band_color: str | None = None
+    line_value: float | None = None  # y-value for horizontal_line
+    line_color: str = "#cc0000"  # color for horizontal_line
+    line_style: str = "dotted"  # "solid" | "dashed" | "dotted"
+    line_width: float = 1.5
 
 
 class DataTableConfig(BaseModel):
@@ -201,6 +227,7 @@ class DataTableConfig(BaseModel):
     position: Position
     columns: list[str]
     font_size: int = 10
+    max_rows: int = 5
 
 
 class ChartState(BaseModel):
@@ -291,6 +318,7 @@ class IngestionResult(BaseModel):
     dataset_path: str
     chart_state: ChartState
     dataset_info: DatasetInfo
+    dataset_rows: list[dict] | None = None  # actual data rows for frontend rendering
 
 
 # --- Error ---

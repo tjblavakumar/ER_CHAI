@@ -18,6 +18,7 @@ export interface AppState {
 
   // Data
   datasetInfo: DatasetInfo | null;
+  datasetRows: Record<string, unknown>[] | null;
 
   // AI Chat
   chatMessages: ChatMessage[];
@@ -31,6 +32,7 @@ export interface AppState {
   contextMenuTarget: { elementId: string; x: number; y: number } | null;
   aiChatOpen: boolean;
   isLoading: boolean;
+  loadingMessage: string;
 
   // Actions
   setChartState: (state: ChartState) => void;
@@ -45,7 +47,9 @@ export interface AppState {
   setContextMenuTarget: (target: { elementId: string; x: number; y: number } | null) => void;
   setAiChatOpen: (open: boolean) => void;
   setIsLoading: (loading: boolean) => void;
+  setLoadingMessage: (msg: string) => void;
   setDatasetInfo: (info: DatasetInfo | null) => void;
+  setDatasetRows: (rows: Record<string, unknown>[] | null) => void;
   resetForNewChart: () => void;
 }
 
@@ -61,6 +65,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Data
   datasetInfo: null,
+  datasetRows: null,
 
   // AI Chat
   chatMessages: [],
@@ -74,6 +79,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   contextMenuTarget: null,
   aiChatOpen: false,
   isLoading: false,
+  loadingMessage: '',
 
   // Actions
   setChartState: (newState: ChartState) => {
@@ -114,8 +120,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   setContextMenuTarget: (target) => set({ contextMenuTarget: target }),
   setAiChatOpen: (open) => set({ aiChatOpen: open }),
   setIsLoading: (loading) => set({ isLoading: loading }),
+  setLoadingMessage: (msg) => set({ loadingMessage: msg }),
 
   setDatasetInfo: (info) => set({ datasetInfo: info }),
+  setDatasetRows: (rows) => set({ datasetRows: rows }),
 
   resetForNewChart: () =>
     set({
@@ -126,6 +134,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       chatSessionId: crypto.randomUUID(),
       summaryText: '',
       datasetInfo: null,
+      datasetRows: null,
       selectedElementId: null,
       contextMenuTarget: null,
     }),

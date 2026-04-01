@@ -22,8 +22,12 @@ export interface AxesConfig {
   x_max: number | null;
   y_min: number | null;
   y_max: number | null;
-  x_scale: string; // "linear" | "logarithmic"
+  x_scale: string;
   y_scale: string;
+  y_format: string;
+  line_width: number;
+  tick_font_size: number;
+  label_font_size: number;
 }
 
 export interface SeriesConfig {
@@ -39,6 +43,9 @@ export interface LegendEntry {
   label: string;
   color: string;
   series_name: string;
+  font_size: number;
+  font_color: string;
+  font_family: string;
 }
 
 export interface LegendConfig {
@@ -56,7 +63,7 @@ export interface GridlineConfig {
 
 export interface AnnotationConfig {
   id: string;
-  type: string; // "text" | "vertical_band"
+  type: string; // "text" | "vertical_band" | "horizontal_line"
   text: string | null;
   position: Position;
   font_size: number;
@@ -64,6 +71,10 @@ export interface AnnotationConfig {
   band_start: string | null;
   band_end: string | null;
   band_color: string | null;
+  line_value: number | null;  // y-value for horizontal_line
+  line_color: string;         // color for horizontal_line
+  line_style: string;         // "solid" | "dashed" | "dotted"
+  line_width: number;
 }
 
 export interface DataTableConfig {
@@ -71,6 +82,7 @@ export interface DataTableConfig {
   position: Position;
   columns: string[];
   font_size: number;
+  max_rows: number;
 }
 
 export interface ChartState {
@@ -156,6 +168,7 @@ export interface IngestionResult {
   dataset_path: string;
   chart_state: ChartState;
   dataset_info: DatasetInfo;
+  dataset_rows: Record<string, unknown>[] | null;
 }
 
 // --- Error ---

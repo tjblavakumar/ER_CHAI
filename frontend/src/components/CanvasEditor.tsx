@@ -26,6 +26,7 @@ const CHART_AREA = {
 
 const CanvasEditor: React.FC = () => {
   const chartState = useAppStore((s) => s.chartState);
+  const datasetRows = useAppStore((s) => s.datasetRows);
   const setChartState = useAppStore((s) => s.setChartState);
   const setContextMenuTarget = useAppStore((s) => s.setContextMenuTarget);
 
@@ -48,6 +49,8 @@ const CanvasEditor: React.FC = () => {
         updated.title = { ...chartState.title, position: { x, y } };
       } else if (elementId === 'legend') {
         updated.legend = { ...chartState.legend, position: { x, y } };
+      } else if (elementId.startsWith('legend_entry_')) {
+        // Individual legend entry dragged — only update elements_positions (already done above)
       } else if (elementId === 'data_table' && chartState.data_table) {
         updated.data_table = { ...chartState.data_table, position: { x, y } };
       } else if (elementId.startsWith('annotation_')) {
@@ -82,6 +85,16 @@ const CanvasEditor: React.FC = () => {
 
       if (elementId === 'title') {
         updated.title = { ...chartState.title, [property]: value };
+      } else if (elementId.startsWith('legend_entry_')) {
+        const seriesName = elementId.replace('legend_entry_', '');
+        updated.legend = {
+          ...chartState.legend,
+          entries: chartState.legend.entries.map((entry) =>
+            entry.series_name === seriesName
+              ? { ...entry, [property]: value }
+              : entry,
+          ),
+        };
       } else if (elementId.startsWith('annotation_')) {
         const annId = elementId.replace('annotation_', '');
         updated.annotations = chartState.annotations.map((a) =>
@@ -94,10 +107,36 @@ const CanvasEditor: React.FC = () => {
       }
 
       setChartState(updated);
-      setContextMenuTarget(null);
+      // Don't close context menu for label edits (text input needs to stay open)
+      if (property !== 'label') {
+        setContextMenuTarget(null);
+      }
     },
     [chartState, setChartState, setContextMenuTarget],
   );
+
+  // Extract date labels from datasetRows (first non-numeric column)
+  // Must be before any early return to satisfy Rules of Hooks
+  const xLabels = React.useMemo(() => {
+    if (!datasetRows || datasetRows.length === 0) return undefined;
+    const firstRow = datasetRows[0];
+    const dateCol = Object.keys(firstRow).find((key) => {
+      const val = firstRow[key];
+      return typeof val === 'string' && isNaN(Number(val));
+    });
+    if (!dateCol) return undefined;
+    return datasetRows.map((row) => String(row[dateCol] ?? ''));
+  }, [datasetRows]);
+
+  // Build series labels map from legend entries (series_name -> display label)
+  const seriesLabels = React.useMemo(() => {
+    if (!chartState) return {};
+    const map: Record<string, string> = {};
+    for (const entry of chartState.legend.entries) {
+      map[entry.series_name] = entry.label;
+    }
+    return map;
+  }, [chartState]);
 
   if (!chartState) {
     return (
@@ -154,12 +193,14 @@ const CanvasEditor: React.FC = () => {
             chartArea={CHART_AREA}
             yMin={yMin}
             yMax={yMax}
+            datasetRows={datasetRows}
           />
 
           {/* Axes */}
           <AxisElement
             config={chartState.axes}
             chartArea={CHART_AREA}
+            xLabels={xLabels}
             onDragEnd={handleDragEnd}
             onContextMenu={handleContextMenu}
           />
@@ -175,6 +216,7 @@ const CanvasEditor: React.FC = () => {
           {/* Legend */}
           <LegendElement
             config={{ ...chartState.legend, position: legendPos }}
+            elementsPositions={chartState.elements_positions}
             onDragEnd={handleDragEnd}
             onContextMenu={handleContextMenu}
           />
@@ -187,6 +229,8 @@ const CanvasEditor: React.FC = () => {
                 key={ann.id}
                 config={{ ...ann, position: annPos }}
                 chartArea={CHART_AREA}
+                yMin={yMin}
+                yMax={yMax}
                 onDragEnd={handleDragEnd}
                 onContextMenu={handleContextMenu}
               />
@@ -197,6 +241,8 @@ const CanvasEditor: React.FC = () => {
           {chartState.data_table && (
             <DataTableElement
               config={{ ...chartState.data_table, position: dataTablePos }}
+              datasetRows={datasetRows}
+              seriesLabels={seriesLabels}
               onDragEnd={handleDragEnd}
               onContextMenu={handleContextMenu}
             />

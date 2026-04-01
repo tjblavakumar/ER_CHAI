@@ -63,8 +63,10 @@ const NetworkBanner: React.FC = () => {
 const DataIngestionBar: React.FC = () => {
   const setChartState = useAppStore((s) => s.setChartState);
   const setDatasetInfo = useAppStore((s) => s.setDatasetInfo);
+  const setDatasetRows = useAppStore((s) => s.setDatasetRows);
   const setSummaryText = useAppStore((s) => s.setSummaryText);
   const setIsLoading = useAppStore((s) => s.setIsLoading);
+  const setLoadingMessage = useAppStore((s) => s.setLoadingMessage);
   const isLoading = useAppStore((s) => s.isLoading);
 
   const [fredUrl, setFredUrl] = useState('');
@@ -95,18 +97,22 @@ const DataIngestionBar: React.FC = () => {
     if (!url) return;
     setIsLoading(true);
     try {
+      setLoadingMessage('Downloading data from FRED...');
       const result = await ingestFromUrl(url);
+      setLoadingMessage('Rendering chart...');
       setChartState(result.chart_state);
       setDatasetInfo(result.dataset_info);
+      setDatasetRows(result.dataset_rows ?? null);
       setFredUrl('');
-      // Auto-generate summary (Req 12.1)
+      setLoadingMessage('Generating executive summary...');
       await autoGenerateSummary(result.dataset_path, result.chart_state);
     } catch {
       // Error toast handled by API interceptor
     } finally {
       setIsLoading(false);
+      setLoadingMessage('');
     }
-  }, [fredUrl, setChartState, setDatasetInfo, setIsLoading, autoGenerateSummary]);
+  }, [fredUrl, setChartState, setDatasetInfo, setIsLoading, setLoadingMessage, autoGenerateSummary]);
 
   // File upload ingestion flow
   const handleFileUpload = useCallback(async () => {
@@ -115,20 +121,25 @@ const DataIngestionBar: React.FC = () => {
     const refImage = imageInputRef.current?.files?.[0];
     setIsLoading(true);
     try {
+      setLoadingMessage(refImage
+        ? 'Parsing data and analyzing reference image (this may take a moment)...'
+        : 'Parsing data and generating chart...');
       const result = await ingestFromFile(file, refImage);
+      setLoadingMessage('Rendering chart...');
       setChartState(result.chart_state);
       setDatasetInfo(result.dataset_info);
-      // Clear file inputs
+      setDatasetRows(result.dataset_rows ?? null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (imageInputRef.current) imageInputRef.current.value = '';
-      // Auto-generate summary (Req 12.1)
+      setLoadingMessage('Generating executive summary...');
       await autoGenerateSummary(result.dataset_path, result.chart_state);
     } catch {
       // Error toast handled by API interceptor
     } finally {
       setIsLoading(false);
+      setLoadingMessage('');
     }
-  }, [setChartState, setDatasetInfo, setIsLoading, autoGenerateSummary]);
+  }, [setChartState, setDatasetInfo, setIsLoading, setLoadingMessage, autoGenerateSummary]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleFredIngest();
@@ -235,25 +246,55 @@ const DataIngestionBar: React.FC = () => {
 
 const App: React.FC = () => {
   const isLoading = useAppStore((s) => s.isLoading);
+  const loadingMessage = useAppStore((s) => s.loadingMessage);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'Arial, sans-serif' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'Arial, sans-serif', position: 'relative' }}>
       {/* Persistent network error banner */}
       <NetworkBanner />
 
-      {/* Loading indicator */}
+      {/* Full-screen loading overlay */}
       {isLoading && (
         <div
           style={{
-            background: '#1a73e8',
-            color: '#fff',
-            textAlign: 'center',
-            padding: '4px 0',
-            fontSize: 12,
-            fontWeight: 600,
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.45)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000,
           }}
         >
-          Processing…
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 12,
+              padding: '32px 48px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+              textAlign: 'center',
+              maxWidth: 400,
+            }}
+          >
+            {/* Spinner */}
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                border: '4px solid #e0e0e0',
+                borderTopColor: '#1a73e8',
+                borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite',
+                margin: '0 auto 16px',
+              }}
+            />
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#333', marginBottom: 6 }}>
+              {loadingMessage || 'Processing...'}
+            </div>
+            <div style={{ fontSize: 12, color: '#888' }}>Please wait</div>
+          </div>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       )}
 

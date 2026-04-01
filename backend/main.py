@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import logging
 import sys
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -45,6 +47,8 @@ async def lifespan(app: FastAPI):
     if config.aws_access_key_id and config.aws_secret_access_key:
         bedrock_kwargs["aws_access_key_id"] = config.aws_access_key_id
         bedrock_kwargs["aws_secret_access_key"] = config.aws_secret_access_key
+        if config.aws_session_token:
+            bedrock_kwargs["aws_session_token"] = config.aws_session_token
     bedrock_client = boto3.client("bedrock-runtime", **bedrock_kwargs)
 
     # Initialize services
@@ -53,7 +57,7 @@ async def lifespan(app: FastAPI):
         bedrock_client=bedrock_client,
         vision_model_id=config.bedrock_vision_model_id,
     )
-    ingestion_service = DataIngestionService(fred_client=fred_client)
+    ingestion_service = DataIngestionService(fred_client=fred_client, image_analyzer=image_analyzer)
     ai_assistant = AIAssistantHandler(
         bedrock_client=bedrock_client,
         model_id=config.bedrock_model_id,

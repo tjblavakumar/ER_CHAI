@@ -7,6 +7,7 @@ merges both results into a unified ``ChartSpecification``.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import logging
@@ -66,18 +67,12 @@ class ImageAnalyzer:
 
     # -- Public API ---------------------------------------------------------
 
-    async def analyze(self, image_bytes: bytes) -> ChartSpecification:
+    async def analyze(self, image_bytes: bytes) -> tuple[ChartSpecification, VisionResult]:
         """Run the full analysis pipeline on *image_bytes*.
 
-        1. Decode & validate the image.
-        2. Run OpenCV extraction (colors, contours, text regions).
-        3. Run Bedrock Vision analysis (semantic chart understanding).
-        4. Merge both results into a unified ``ChartSpecification``.
-
-        Raises ``ValueError`` with a descriptive message when the image
-        cannot be decoded or does not appear to be a chart.
+        Returns a tuple of (ChartSpecification, VisionResult) so callers
+        can access both the merged spec and the raw Vision details.
         """
-        # Validate that the bytes can be decoded as an image
         if not image_bytes:
             raise ValueError(
                 "Unable to decode the provided image. "
@@ -94,11 +89,10 @@ class ImageAnalyzer:
                 "Please supply a valid PNG, JPEG, or BMP file."
             )
 
-        # Run both pipelines
         cv_result = self._opencv_extract(image_bytes)
         vision_result = await self._bedrock_vision_analyze(image_bytes)
 
-        return self._merge_results(cv_result, vision_result)
+        return self._merge_results(cv_result, vision_result), vision_result
 
     # -- OpenCV extraction --------------------------------------------------
 
@@ -128,29 +122,82 @@ class ImageAnalyzer:
     # -- Bedrock Vision analysis --------------------------------------------
 
     async def _bedrock_vision_analyze(self, image_bytes: bytes) -> VisionResult:
-        """Send the image to Bedrock Vision API for semantic chart analysis.
-
-        Returns a ``VisionResult`` parsed from the model's JSON response.
-        Raises ``ValueError`` if the model indicates the image is not a chart.
-        """
+        """Send the image to Bedrock Vision API for comprehensive chart analysis."""
         b64_image = base64.b64encode(image_bytes).decode("utf-8")
 
         prompt = (
-            "Analyze this chart image and return a JSON object with the following fields:\n"
-            '- "chart_type": one of "line", "bar", or "mixed"\n'
-            '- "axis_config": {"x_label": str, "y_label": str, '
-            '"x_min": number|null, "x_max": number|null, '
-            '"y_min": number|null, "y_max": number|null}\n'
-            '- "legend_entries": [{"label": str, "color": hex str, "series_name": str}]\n'
-            '- "annotations": [{"text": str, "x": number, "y": number}]\n'
-            '- "data_table": {"columns": [str], "visible": bool, "font_size": int} or null\n'
-            '- "layout_description": a brief description of the chart layout\n'
-            "Return ONLY valid JSON, no markdown fences."
+            "You are an expert chart analyst. Analyze this chart image THOROUGHLY and "
+            "extract EVERY visual element. Return a JSON object with ALL of the following fields.\n\n"
+            "REQUIRED FIELDS:\n"
+            '1. "chart_type": one of "line", "bar", "area", or "mixed"\n'
+            '2. "title": the chart title text (exact text as shown)\n'
+            '3. "title_font_size": estimated font size of the title (integer)\n'
+            '4. "title_color": hex color of the title text\n\n'
+            "AXIS CONFIGURATION:\n"
+            '5. "axis_config": {\n'
+            '     "x_label": x-axis label text,\n'
+            '     "y_label": y-axis label text,\n'
+            '     "x_min": minimum x value or null,\n'
+            '     "x_max": maximum x value or null,\n'
+            '     "y_min": minimum y value shown on axis,\n'
+            '     "y_max": maximum y value shown on axis\n'
+            "   }\n"
+            '6. "y_format": how y-axis values are formatted. Values:\n'
+            '   - "percent" if values have % symbol\n'
+            '   - "integer" if values are whole numbers\n'
+            '   - "decimal1" if values have 1 decimal place\n'
+            '   - "auto" otherwise\n'
+            '7. "axis_line_width": thickness of axis lines (1-5)\n'
+            '8. "tick_font_size": font size of tick labels\n\n'
+            "DATA SERIES (CRITICAL - be very precise with colors):\n"
+            '9. "legend_entries": array of objects for EACH data series:\n'
+            "   [{\n"
+            '     "label": display name of the series,\n'
+            '     "color": EXACT hex color of the line/bar (e.g., "#003B5C"),\n'
+            '     "series_name": identifier for the series\n'
+            "   }]\n"
+            '10. "series_line_widths": array of line widths for each series (e.g., [2.0, 1.5])\n'
+            '11. "series_line_styles": array of line styles for each series '
+            '("solid", "dashed", "dotted")\n'
+            '12. "legend_position": where legends appear - "inline" (next to lines), '
+            '"top", "bottom", "right"\n\n'
+            "GRIDLINES:\n"
+            '13. "gridline_style": "solid", "dashed", "dotted", or "none"\n'
+            '14. "gridline_color": hex color of gridlines\n\n'
+            "ANNOTATIONS (extract ALL text annotations, lines, and bands):\n"
+            '15. "annotations": array of text annotations visible on the chart:\n'
+            '   [{"text": "annotation text", "x": pixel_x, "y": pixel_y}]\n'
+            '16. "horizontal_lines": array of horizontal reference lines:\n'
+            '   [{"value": y_axis_value, "label": "text label if any", '
+            '"color": hex_color, "style": "dotted/dashed/solid"}]\n'
+            '   Look for dotted/dashed lines that span the full chart width at a specific Y value.\n'
+            '17. "vertical_bands": array of shaded vertical regions:\n'
+            '   [{"start": "start_date", "end": "end_date", "color": hex_color}]\n'
+            '   Look for shaded/highlighted rectangular regions spanning the chart height.\n\n'
+            "DATA TABLE:\n"
+            '18. "data_table": if a data table is visible below/beside the chart:\n'
+            '   {"columns": [column_names], "visible": true, "font_size": 10}\n'
+            "   Set to null if no data table is visible.\n\n"
+            "LAYOUT:\n"
+            '19. "layout_description": detailed description of the overall layout, '
+            "including where legends are placed, any special formatting, footnotes, "
+            "source citations, or other visual elements.\n"
+            '20. "background_color": hex color of the chart background\n\n'
+            "IMPORTANT INSTRUCTIONS:\n"
+            "- Be EXTREMELY precise with colors. Use exact hex codes.\n"
+            "- Identify EVERY data series and its exact color.\n"
+            "- Capture ALL horizontal reference lines (target lines, threshold lines).\n"
+            "- Capture ALL vertical shaded bands (recession bands, highlight periods).\n"
+            "- Capture ALL text annotations visible on the chart.\n"
+            "- Note the exact y-axis range and formatting (%, whole numbers, decimals).\n"
+            "- If legend text appears inline next to the data lines (not in a box), "
+            'set legend_position to "inline".\n\n'
+            "Return ONLY valid JSON, no markdown fences or explanation."
         )
 
         body = json.dumps({
             "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 2048,
+            "max_tokens": 16384,
             "messages": [
                 {
                     "role": "user",
@@ -170,7 +217,8 @@ class ImageAnalyzer:
         })
 
         try:
-            response = self._bedrock.invoke_model(
+            response = await asyncio.to_thread(
+                self._bedrock.invoke_model,
                 modelId=self._vision_model_id,
                 contentType="application/json",
                 accept="application/json",
@@ -178,6 +226,7 @@ class ImageAnalyzer:
             )
             response_body = json.loads(response["body"].read())
             text_content = response_body["content"][0]["text"]
+            logger.info("Vision API raw response: %s", text_content[:1000])
             parsed = json.loads(text_content)
         except Exception as exc:
             raise ValueError(
@@ -192,34 +241,24 @@ class ImageAnalyzer:
         """Combine OpenCV and Vision results into a unified ``ChartSpecification``.
 
         Strategy:
-        - **Chart type**: prefer Vision API (semantic understanding).
-        - **Colors**: use OpenCV dominant colours mapped to Vision legend entries.
-        - **Axis config**: prefer Vision API.
-        - **Legend layout**: derive from Vision layout description.
-        - **Font styles**: use FRBSF defaults (OpenCV bounding boxes aren't
-          reliable enough for font extraction).
-        - **Annotations**: prefer Vision API.
-        - **Data table**: prefer Vision API.
-        - **Vertical bands**: empty by default (require explicit user input).
+        - Prefer Vision API colors (semantic understanding is more reliable for chart lines)
+        - Use OpenCV colors only as fallback when Vision doesn't identify series
+        - Pass through all Vision-extracted metadata (title, formatting, annotations, etc.)
         """
-        # Build colour mappings: pair Vision legend entries with OpenCV colours
+        # Build colour mappings: prefer Vision colors, fallback to OpenCV
         color_mappings: dict[str, str] = {}
-        for i, entry in enumerate(vision.legend_entries):
-            if i < len(cv.dominant_colors):
-                color_mappings[entry.series_name] = cv.dominant_colors[i]
-            else:
-                color_mappings[entry.series_name] = entry.color
+        for entry in vision.legend_entries:
+            color_mappings[entry.series_name] = entry.color
 
-        # If no legend entries from Vision, create mappings from OpenCV colours
+        # If no legend entries from Vision, use OpenCV colours
         if not color_mappings and cv.dominant_colors:
             for i, color in enumerate(cv.dominant_colors):
                 color_mappings[f"series_{i}"] = color
 
-        # Ensure at least one colour mapping exists
         if not color_mappings:
             color_mappings["series_0"] = "#003B5C"
 
-        # Derive legend layout from Vision description
+        # Derive legend layout
         layout_desc = vision.layout_description.lower()
         if "right" in layout_desc:
             legend_layout = LegendLayout(position="right", orientation="vertical")
@@ -227,13 +266,21 @@ class ImageAnalyzer:
             legend_layout = LegendLayout(position="left", orientation="vertical")
         elif "top" in layout_desc:
             legend_layout = LegendLayout(position="top", orientation="horizontal")
+        elif "inline" in layout_desc or vision.legend_position == "inline":
+            legend_layout = LegendLayout(position="bottom", orientation="horizontal")
         else:
             legend_layout = _DEFAULT_LEGEND_LAYOUT
 
         return ChartSpecification(
             chart_type=vision.chart_type,
             color_mappings=color_mappings,
-            font_styles=_DEFAULT_FONT_STYLES,
+            font_styles=FontStyles(
+                title=FontSpec(family="Arial", size=vision.title_font_size, color=vision.title_color, weight="bold"),
+                axis_label=FontSpec(family="Arial", size=12, color="#333333"),
+                tick_label=FontSpec(family="Arial", size=vision.tick_font_size, color="#333333"),
+                legend=FontSpec(family="Arial", size=11, color="#333333"),
+                annotation=FontSpec(family="Arial", size=10, color="#333333"),
+            ),
             axis_config=vision.axis_config,
             legend_layout=legend_layout,
             annotations=vision.annotations,
@@ -271,6 +318,11 @@ class ImageAnalyzer:
         hex_colors: list[str] = []
         for bgr in sorted_centers:
             b, g, r = int(bgr[0]), int(bgr[1]), int(bgr[2])
+            # Filter out near-white (background) and near-black (text) colors
+            if r > 230 and g > 230 and b > 230:
+                continue
+            if r < 30 and g < 30 and b < 30:
+                continue
             hex_colors.append(f"#{r:02X}{g:02X}{b:02X}")
 
         return hex_colors
@@ -362,13 +414,13 @@ class ImageAnalyzer:
     def _parse_vision_response(data: dict) -> VisionResult:
         """Parse the raw JSON dict from Bedrock Vision into a ``VisionResult``."""
         chart_type = data.get("chart_type", "line")
-        if chart_type not in ("line", "bar", "mixed"):
+        if chart_type not in ("line", "bar", "mixed", "area"):
             chart_type = "line"
 
         raw_axis = data.get("axis_config", {})
         axis_config = AxisConfig(
-            x_label=raw_axis.get("x_label", ""),
-            y_label=raw_axis.get("y_label", ""),
+            x_label=raw_axis.get("x_label") or "",
+            y_label=raw_axis.get("y_label") or "",
             x_min=raw_axis.get("x_min"),
             x_max=raw_axis.get("x_max"),
             y_min=raw_axis.get("y_min"),
@@ -406,13 +458,25 @@ class ImageAnalyzer:
                 font_size=raw_dt.get("font_size", 10),
             )
 
-        layout_description = data.get("layout_description", "")
-
         return VisionResult(
             chart_type=chart_type,
+            title=data.get("title") or "",
+            title_font_size=data.get("title_font_size", 16),
+            title_color=data.get("title_color") or "#003B5C",
             axis_config=axis_config,
+            y_format=data.get("y_format") or "auto",
+            axis_line_width=data.get("axis_line_width", 1.0),
+            tick_font_size=data.get("tick_font_size", 10),
             legend_entries=legend_entries,
+            legend_position=data.get("legend_position") or "inline",
+            gridline_style=data.get("gridline_style") or "dashed",
+            gridline_color=data.get("gridline_color") or "#D1D3D4",
             annotations=annotations,
+            horizontal_lines=data.get("horizontal_lines", []),
+            vertical_bands=data.get("vertical_bands", []),
             data_table=data_table,
-            layout_description=layout_description,
+            layout_description=data.get("layout_description") or "",
+            background_color=data.get("background_color") or "#ffffff",
+            series_line_widths=data.get("series_line_widths", []),
+            series_line_styles=data.get("series_line_styles", []),
         )

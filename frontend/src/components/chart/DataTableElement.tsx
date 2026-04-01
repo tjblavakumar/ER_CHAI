@@ -4,26 +4,84 @@ import type { DataTableConfig } from '../../types';
 
 interface DataTableElementProps {
   config: DataTableConfig;
+  datasetRows?: Record<string, unknown>[] | null;
+  seriesLabels?: Record<string, string>;
   draggable?: boolean;
   onDragEnd?: (id: string, x: number, y: number) => void;
   onContextMenu?: (id: string, x: number, y: number) => void;
 }
 
-const COL_WIDTH = 90;
+const SERIES_COL_WIDTH = 120;
+const DATE_COL_WIDTH = 70;
 const ROW_HEIGHT = 22;
 const HEADER_HEIGHT = 24;
-const PLACEHOLDER_ROWS = 3;
 
+const formatCellValue = (value: unknown): string => {
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'number') return value.toFixed(2);
+  return String(value);
+};
+
+const formatDateHeader = (value: unknown): string => {
+  if (value === null || value === undefined) return '';
+  const s = String(value);
+  // Shorten ISO dates like "2020-01-01" to "Jan 20" style
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${months[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;
+  }
+  return s.length > 8 ? s.slice(0, 8) : s;
+};
+
+/**
+ * Transposed data table for time series:
+ * - Rows = data series (using legend labels)
+ * - Columns = evenly sampled dates
+ */
 const DataTableElement: React.FC<DataTableElementProps> = ({
   config,
+  datasetRows,
+  seriesLabels,
   draggable = true,
   onDragEnd,
   onContextMenu,
 }) => {
   if (!config.visible || config.columns.length === 0) return null;
 
-  const tableWidth = config.columns.length * COL_WIDTH;
-  const tableHeight = HEADER_HEIGHT + PLACEHOLDER_ROWS * ROW_HEIGHT;
+  const maxDateCols = config.max_rows ?? 5;
+  const hasData = datasetRows && datasetRows.length > 0;
+
+  // Detect date column (first string/non-numeric column)
+  let dateColumn: string | null = null;
+  if (hasData) {
+    const firstRow = datasetRows[0];
+    dateColumn = Object.keys(firstRow).find((key) => {
+      const val = firstRow[key];
+      return typeof val === 'string' && isNaN(Number(val));
+    }) ?? null;
+  }
+
+  // Sample evenly spaced date indices
+  const totalRows = hasData ? datasetRows.length : 0;
+  const sampledIndices: number[] = [];
+  if (totalRows > 0 && maxDateCols > 0) {
+    const count = Math.min(maxDateCols, totalRows);
+    for (let i = 0; i < count; i++) {
+      sampledIndices.push(Math.round((i * (totalRows - 1)) / Math.max(count - 1, 1)));
+    }
+  }
+
+  const dateHeaders = sampledIndices.map((idx) =>
+    dateColumn && hasData ? formatDateHeader(datasetRows[idx][dateColumn]) : `Col ${idx}`,
+  );
+
+  const seriesCols = config.columns; // numeric series column names
+  const numDateCols = dateHeaders.length;
+  const numRows = seriesCols.length;
+
+  const tableWidth = SERIES_COL_WIDTH + numDateCols * DATE_COL_WIDTH;
+  const tableHeight = HEADER_HEIGHT + numRows * ROW_HEIGHT;
 
   return (
     <Group
@@ -45,70 +103,83 @@ const DataTableElement: React.FC<DataTableElementProps> = ({
       }}
     >
       {/* Background */}
-      <Rect
-        width={tableWidth}
-        height={tableHeight}
-        fill="#fff"
-        stroke="#999"
-        strokeWidth={1}
-      />
+      <Rect width={tableWidth} height={tableHeight} fill="#fff" stroke="#999" strokeWidth={1} />
 
       {/* Header row background */}
-      <Rect
-        width={tableWidth}
-        height={HEADER_HEIGHT}
-        fill="#e8e8e8"
+      <Rect width={tableWidth} height={HEADER_HEIGHT} fill="#e8e8e8" />
+
+      {/* First header cell: "Series" */}
+      <Text
+        x={4}
+        y={5}
+        text="Series"
+        fontSize={config.font_size}
+        fontFamily="Arial"
+        fontStyle="bold"
+        fill="#333"
+        width={SERIES_COL_WIDTH - 8}
+        ellipsis
       />
 
-      {/* Column headers */}
-      {config.columns.map((col, i) => (
+      {/* Date column headers */}
+      {dateHeaders.map((header, i) => (
         <Text
-          key={`header-${col}`}
-          x={i * COL_WIDTH + 4}
+          key={`dh-${i}`}
+          x={SERIES_COL_WIDTH + i * DATE_COL_WIDTH + 4}
           y={5}
-          text={col}
+          text={header}
           fontSize={config.font_size}
           fontFamily="Arial"
           fontStyle="bold"
           fill="#333"
-          width={COL_WIDTH - 8}
+          width={DATE_COL_WIDTH - 8}
           ellipsis
         />
       ))}
 
       {/* Header separator */}
-      <Line
-        points={[0, HEADER_HEIGHT, tableWidth, HEADER_HEIGHT]}
-        stroke="#999"
-        strokeWidth={1}
-      />
+      <Line points={[0, HEADER_HEIGHT, tableWidth, HEADER_HEIGHT]} stroke="#999" strokeWidth={1} />
 
-      {/* Placeholder data rows */}
-      {Array.from({ length: PLACEHOLDER_ROWS }, (_, row) =>
-        config.columns.map((col, colIdx) => (
-          <Text
-            key={`cell-${row}-${col}`}
-            x={colIdx * COL_WIDTH + 4}
-            y={HEADER_HEIGHT + row * ROW_HEIGHT + 4}
-            text="—"
-            fontSize={config.font_size}
-            fontFamily="Arial"
-            fill="#888"
-            width={COL_WIDTH - 8}
-          />
-        )),
-      )}
+      {/* Data rows: one per series */}
+      {seriesCols.map((col, rowIdx) => {
+        const label = seriesLabels?.[col] ?? col;
+        return (
+          <React.Fragment key={`row-${col}`}>
+            {/* Series name cell */}
+            <Text
+              x={4}
+              y={HEADER_HEIGHT + rowIdx * ROW_HEIGHT + 4}
+              text={label}
+              fontSize={config.font_size}
+              fontFamily="Arial"
+              fontStyle="bold"
+              fill="#333"
+              width={SERIES_COL_WIDTH - 8}
+              ellipsis
+            />
+            {/* Value cells at sampled dates */}
+            {sampledIndices.map((dataIdx, colIdx) => (
+              <Text
+                key={`cell-${rowIdx}-${colIdx}`}
+                x={SERIES_COL_WIDTH + colIdx * DATE_COL_WIDTH + 4}
+                y={HEADER_HEIGHT + rowIdx * ROW_HEIGHT + 4}
+                text={hasData ? formatCellValue(datasetRows[dataIdx][col]) : '—'}
+                fontSize={config.font_size}
+                fontFamily="Arial"
+                fill="#333"
+                width={DATE_COL_WIDTH - 8}
+                ellipsis
+              />
+            ))}
+          </React.Fragment>
+        );
+      })}
 
       {/* Row separators */}
-      {Array.from({ length: PLACEHOLDER_ROWS - 1 }, (_, i) => {
+      {Array.from({ length: numRows - 1 }, (_, i) => {
         const ry = HEADER_HEIGHT + (i + 1) * ROW_HEIGHT;
         return (
-          <Line
-            key={`row-sep-${i}`}
-            points={[0, ry, tableWidth, ry]}
-            stroke="#ddd"
-            strokeWidth={0.5}
-          />
+          <Line key={`row-sep-${i}`} points={[0, ry, tableWidth, ry]} stroke="#ddd" strokeWidth={0.5} />
         );
       })}
     </Group>

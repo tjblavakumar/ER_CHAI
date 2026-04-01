@@ -49,8 +49,10 @@ const SummaryEditor: React.FC = () => {
         placeholder="Summary will appear here after chart generation."
         style={{
           width: '100%',
-          minHeight: 80,
+          minHeight: 200,
+          maxHeight: 400,
           resize: 'vertical',
+          overflowY: 'auto',
           fontFamily: 'inherit',
           fontSize: 13,
           padding: 8,

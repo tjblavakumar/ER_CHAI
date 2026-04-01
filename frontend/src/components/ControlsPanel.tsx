@@ -89,7 +89,16 @@ const ControlsPanel: React.FC = () => {
 
   const patchSeries = (idx: number, p: Partial<SeriesConfig>) => {
     const updated = series.map((s, i) => (i === idx ? { ...s, ...p } : s));
-    patch({ series: updated });
+    // If color changed, also update the corresponding legend entry
+    let updatedLegend = legend;
+    if (p.color) {
+      const seriesName = series[idx].name;
+      const updatedEntries = legend.entries.map((entry) =>
+        entry.series_name === seriesName ? { ...entry, color: p.color! } : entry,
+      );
+      updatedLegend = { ...legend, entries: updatedEntries };
+    }
+    patch({ series: updated, legend: updatedLegend });
   };
 
   const patchLegend = (p: Partial<LegendConfig>) => patch({ legend: { ...legend, ...p } });
@@ -108,6 +117,7 @@ const ControlsPanel: React.FC = () => {
       position: { x: 0, y: 0 },
       columns: [],
       font_size: 10,
+      max_rows: 5,
     };
     patch({ data_table: { ...current, ...p } });
   };
@@ -124,6 +134,7 @@ const ControlsPanel: React.FC = () => {
           >
             <option value="line">Line</option>
             <option value="bar">Bar</option>
+            <option value="area">Area</option>
             <option value="mixed">Mixed</option>
           </select>
         </Field>
@@ -199,6 +210,50 @@ const ControlsPanel: React.FC = () => {
             <option value="logarithmic">Logarithmic</option>
           </select>
         </Field>
+        <Field label="Y Format">
+          <select
+            value={axes.y_format ?? 'auto'}
+            onChange={(e) => patchAxes({ y_format: e.target.value })}
+            style={{ width: '100%' }}
+          >
+            <option value="auto">Auto</option>
+            <option value="integer">Whole Number</option>
+            <option value="percent">Percent (%)</option>
+            <option value="decimal1">1 Decimal</option>
+            <option value="decimal2">2 Decimals</option>
+          </select>
+        </Field>
+        <Field label="Line Width">
+          <input
+            type="number"
+            min={0.5}
+            max={10}
+            step={0.5}
+            value={axes.line_width ?? 1}
+            onChange={(e) => patchAxes({ line_width: Number(e.target.value) })}
+            style={{ width: '100%' }}
+          />
+        </Field>
+        <Field label="Tick Font">
+          <input
+            type="number"
+            min={6}
+            max={24}
+            value={axes.tick_font_size ?? 10}
+            onChange={(e) => patchAxes({ tick_font_size: Number(e.target.value) })}
+            style={{ width: '100%' }}
+          />
+        </Field>
+        <Field label="Label Font">
+          <input
+            type="number"
+            min={8}
+            max={32}
+            value={axes.label_font_size ?? 12}
+            onChange={(e) => patchAxes({ label_font_size: Number(e.target.value) })}
+            style={{ width: '100%' }}
+          />
+        </Field>
       </Section>
 
       {/* ---- Series ---- */}
@@ -221,6 +276,7 @@ const ControlsPanel: React.FC = () => {
               >
                 <option value="line">Line</option>
                 <option value="bar">Bar</option>
+                <option value="area">Area</option>
               </select>
             </Field>
             <Field label="Line Width">
@@ -267,6 +323,7 @@ const ControlsPanel: React.FC = () => {
             <option value="Times New Roman">Times New Roman</option>
             <option value="Georgia">Georgia</option>
             <option value="Courier New">Courier New</option>
+            <option value="Greycliff CF">Greycliff CF</option>
           </select>
         </Field>
         <Field label="Font Size">
@@ -418,6 +475,56 @@ const ControlsPanel: React.FC = () => {
                 </Field>
               </>
             )}
+            {ann.type === 'horizontal_line' && (
+              <>
+                <Field label="Y Value">
+                  <input
+                    type="number"
+                    step={0.1}
+                    value={ann.line_value ?? 0}
+                    onChange={(e) => patchAnnotation(idx, { line_value: Number(e.target.value) })}
+                    style={{ width: '100%' }}
+                  />
+                </Field>
+                <Field label="Label">
+                  <input
+                    type="text"
+                    value={ann.text ?? ''}
+                    onChange={(e) => patchAnnotation(idx, { text: e.target.value })}
+                    style={{ width: '100%' }}
+                  />
+                </Field>
+                <Field label="Line Color">
+                  <input
+                    type="color"
+                    value={ann.line_color ?? '#cc0000'}
+                    onChange={(e) => patchAnnotation(idx, { line_color: e.target.value })}
+                  />
+                </Field>
+                <Field label="Line Style">
+                  <select
+                    value={ann.line_style ?? 'dotted'}
+                    onChange={(e) => patchAnnotation(idx, { line_style: e.target.value })}
+                    style={{ width: '100%' }}
+                  >
+                    <option value="dotted">Dotted</option>
+                    <option value="dashed">Dashed</option>
+                    <option value="solid">Solid</option>
+                  </select>
+                </Field>
+                <Field label="Line Width">
+                  <input
+                    type="number"
+                    min={0.5}
+                    max={5}
+                    step={0.5}
+                    value={ann.line_width ?? 1.5}
+                    onChange={(e) => patchAnnotation(idx, { line_width: Number(e.target.value) })}
+                    style={{ width: '100%' }}
+                  />
+                </Field>
+              </>
+            )}
             <Field label="X">
               <input
                 type="number"
@@ -441,6 +548,77 @@ const ControlsPanel: React.FC = () => {
           </div>
         ))}
         {annotations.length === 0 && <p style={{ color: '#999' }}>No annotations.</p>}
+        <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+          <button
+            style={{ flex: 1, fontSize: 11, padding: '3px 0' }}
+            onClick={() => {
+              const newAnn = {
+                id: `ann_${Date.now()}`,
+                type: 'horizontal_line' as const,
+                text: '',
+                position: { x: 0, y: 0 },
+                font_size: 10,
+                font_color: '#cc0000',
+                band_start: null,
+                band_end: null,
+                band_color: null,
+                line_value: 2.0,
+                line_color: '#cc0000',
+                line_style: 'dotted',
+                line_width: 1.5,
+              };
+              patch({ annotations: [...annotations, newAnn] });
+            }}
+          >
+            + H-Line
+          </button>
+          <button
+            style={{ flex: 1, fontSize: 11, padding: '3px 0' }}
+            onClick={() => {
+              const newAnn = {
+                id: `ann_${Date.now()}`,
+                type: 'text' as const,
+                text: 'Note',
+                position: { x: 200, y: 200 },
+                font_size: 10,
+                font_color: '#333333',
+                band_start: null,
+                band_end: null,
+                band_color: null,
+                line_value: null,
+                line_color: '#cc0000',
+                line_style: 'dotted',
+                line_width: 1.5,
+              };
+              patch({ annotations: [...annotations, newAnn] });
+            }}
+          >
+            + Text
+          </button>
+          <button
+            style={{ flex: 1, fontSize: 11, padding: '3px 0' }}
+            onClick={() => {
+              const newAnn = {
+                id: `ann_${Date.now()}`,
+                type: 'vertical_band' as const,
+                text: null,
+                position: { x: 200, y: 0 },
+                font_size: 10,
+                font_color: '#333333',
+                band_start: null,
+                band_end: null,
+                band_color: '#cccccc',
+                line_value: null,
+                line_color: '#cc0000',
+                line_style: 'dotted',
+                line_width: 1.5,
+              };
+              patch({ annotations: [...annotations, newAnn] });
+            }}
+          >
+            + V-Band
+          </button>
+        </div>
       </Section>
 
       {/* ---- Data Table ---- */}
@@ -454,6 +632,16 @@ const ControlsPanel: React.FC = () => {
         </Field>
         {(data_table?.visible ?? false) && (
           <>
+            <Field label="Max Rows">
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={data_table?.max_rows ?? 5}
+                onChange={(e) => patchDataTable({ max_rows: Number(e.target.value) })}
+                style={{ width: '100%' }}
+              />
+            </Field>
             <Field label="Font Size">
               <input
                 type="number"
@@ -464,6 +652,30 @@ const ControlsPanel: React.FC = () => {
                 style={{ width: '100%' }}
               />
             </Field>
+            <div style={{ marginBottom: 6, fontSize: 12 }}>
+              <label style={{ fontWeight: 600 }}>Columns</label>
+              <div style={{ marginTop: 4 }}>
+                {(chartState.dataset_columns ?? []).map((col) => {
+                  const isChecked = (data_table?.columns ?? []).includes(col);
+                  return (
+                    <label key={col} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) => {
+                          const current = data_table?.columns ?? [];
+                          const updated = e.target.checked
+                            ? [...current, col]
+                            : current.filter((c) => c !== col);
+                          patchDataTable({ columns: updated });
+                        }}
+                      />
+                      {col}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
           </>
         )}
       </Section>

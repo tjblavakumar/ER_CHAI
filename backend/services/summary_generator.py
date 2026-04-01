@@ -116,13 +116,14 @@ class SummaryGenerator:
             try:
                 body = json.dumps({
                     "anthropic_version": "bedrock-2023-05-31",
-                    "max_tokens": 4096,
+                    "max_tokens": 8192,
                     "messages": [
                         {"role": "user", "content": prompt},
                     ],
                 })
 
-                response = self._bedrock.invoke_model(
+                response = await asyncio.to_thread(
+                    self._bedrock.invoke_model,
                     modelId=self._model_id,
                     contentType="application/json",
                     accept="application/json",
