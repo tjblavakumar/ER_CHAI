@@ -58,7 +58,7 @@ _DEFAULT_LEGEND_LAYOUT = LegendLayout(position="bottom", orientation="horizontal
 class ImageAnalyzer:
     """Orchestrates OpenCV + Bedrock Vision analysis of reference chart images."""
 
-    def __init__(self, bedrock_client: Any | None = None, *, region: str = "us-west-2",
+    def __init__(self, bedrock_client: Any | None = None, *, region: str = "us-east-1",
                  vision_model_id: str = "anthropic.claude-3-sonnet-20240229-v1:0") -> None:
         self._bedrock = bedrock_client or boto3.client(
             "bedrock-runtime", region_name=region,

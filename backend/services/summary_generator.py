@@ -39,7 +39,7 @@ class SummaryGenerator:
         self,
         bedrock_client: Any | None = None,
         *,
-        region: str = "us-west-2",
+        region: str = "us-east-1",
         model_id: str = "anthropic.claude-3-sonnet-20240229-v1:0",
     ) -> None:
         self._bedrock = bedrock_client or boto3.client(

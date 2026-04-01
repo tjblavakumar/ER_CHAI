@@ -6,7 +6,7 @@
 fred_api_key: "YOUR_FRED_API_KEY"
 
 # AWS region for Bedrock access
-aws_region: "us-west-2"
+aws_region: "us-east-1"
 
 # AWS credentials (optional if using IAM role / instance profile)
 # aws_access_key_id: "AKIA..."
