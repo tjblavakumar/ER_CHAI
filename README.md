@@ -1,50 +1,83 @@
 # FRBSF Chart Builder
 
-A local web application for creating, customizing, and exporting FRBSF-branded economic charts. Built with FastAPI (Python) backend and React + Konva.js frontend, powered by AWS Bedrock for AI-driven chart editing and executive summary generation.
+A local web application for creating, customizing, and exporting FRBSF-branded economic charts. Built with FastAPI (Python) backend and React + Konva.js frontend, powered by AWS Bedrock (Claude Sonnet 4.5) for AI-driven chart editing, image analysis, and executive summary generation.
 
 ## Features
 
 ### 1. Data Ingestion
 - **FRED API**: Paste a FRED URL to automatically download economic data and generate a chart
 - **File Upload**: Upload CSV or Excel files with optional reference chart image
-- **Reference Image Analysis**: OpenCV + AWS Bedrock Vision extracts colors, chart type, annotations, formatting from reference images
+- **Reference Image Analysis**: OpenCV + AWS Bedrock Vision (20-field comprehensive prompt) extracts colors, chart type, annotations, horizontal lines, vertical bands, axis formatting, gridlines, title, and layout from reference images
 - **Long-format detection**: Automatically pivots long-format data (date, key, value) to wide format
+- **Date range filtering**: X-axis supports date-based min/max filtering
 
 ### 2. Interactive Chart Editor
 - **Konva.js Canvas**: All chart elements rendered as draggable objects
 - **Drag & Drop**: Move title, legend entries, annotations, data table anywhere on the canvas
-- **Right-click Context Menu**: Change font size, color, family, and rename legend labels
+- **Right-click Context Menu**: Change font size, color, family; rename legend labels; delete annotations
 - **Chart Types**: Line, bar, area, and mixed charts
-- **Manual Controls**: Axis properties, series colors, gridlines, annotations, data table configuration
+- **Manual Controls**: Axis properties (labels, ranges, scales, line width, tick/label font sizes, Y-axis format), series colors/styles, gridlines, legend, data table
 
-### 3. AI Assistant
-- **Natural Language Commands**: "Change to area chart", "Add % to y-axis", "Create vertical band between 2020-01 and 2020-06"
+### 3. Annotations
+- **Horizontal Lines**: Dotted/dashed/solid reference lines at specific Y values (e.g., inflation target)
+- **Vertical Lines**: Lines at specific dates (e.g., financial crisis, COVID)
+- **Vertical Bands**: Shaded regions between date ranges (e.g., recession periods)
+- **Text Annotations**: Floating text labels anywhere on the chart
+- **Add/Delete**: Manual buttons (+ H-Line, + V-Line, + Text, + V-Band) and ✕ delete per annotation
+- **AI-driven**: Create and remove annotations via natural language
+- **Right-click Delete**: Right-click any annotation on the canvas to delete it
+
+### 4. AI Assistant (Claude Sonnet 4.5)
+- **Natural Language Commands**: "Change to area chart", "Add % to y-axis", "Create vertical band between 2020-01 and 2020-06", "Create vertical red lines for financial crises"
 - **Data Q&A**: Ask questions about your data — trends, peaks, comparisons
+- **Summary Updates**: "Append this information to the executive summary"
+- **Annotation Management**: Add and remove annotations by name
 - **Floating Chat Window**: Bottom-right icon opens the AI chat with undo support
 - **Per-chart Context**: Conversation resets when you create a new chart
+- **Bedrock Status**: Green/red indicator in the header shows connection status
 
-### 4. Executive Summary
+### 5. Y-Axis Formatting
+- **Auto**: Smart formatting based on value range
+- **Integer**: Whole numbers
+- **Percent**: Values with % symbol
+- **Decimal**: 1 or 2 decimal places
+- Configurable via Controls Panel or AI assistant
+
+### 6. Legend
+- **Individually Draggable**: Each legend entry is a separate floating element
+- **Right-click Rename**: Change legend label text via context menu
+- **Font Customization**: Per-entry font size, color, family
+- **Color Sync**: Changing series color automatically updates legend
+
+### 7. Data Table
+- **Transposed Layout**: Rows = data series, Columns = sampled dates
+- **Customizable**: Select which columns to show, max date columns, font size
+- **Legend-synced**: Row labels use legend entry names
+
+### 8. Executive Summary
 - **Auto-generated**: Trend analysis, peaks/troughs, predictions, economist perspective
-- **Editable**: Modify the AI-generated summary as needed
-- **Powered by Bedrock**: Uses Claude models for analysis
+- **Editable**: Large text area (10+ rows) with vertical scrollbar
+- **AI Append**: Ask the AI to add analysis to the summary
+- **Powered by Bedrock**: Uses Claude Sonnet 4.5
 
-### 5. Export
-- **Python**: Standalone matplotlib script with embedded data (zip with requirements.txt)
+### 9. Export
+- **Python**: Standalone matplotlib script with embedded data, date-aware x-axis, area charts, annotations (zip with requirements.txt)
 - **R**: Standalone ggplot2 script with embedded data (zip with install_packages.R)
-- **PDF**: Chart image (300 DPI) + executive summary with FRBSF branding
+- **PDF**: Chart image (300 DPI) with proper dates, area fills, horizontal lines, vertical bands, y-axis formatting + executive summary with FRBSF branding
 
-### 6. Project Management
+### 10. Project Management
 - **Save/Load**: Persist charts to SQLite, resume work across sessions
+- **Dataset Reload**: Loading a saved project reloads the CSV data for rendering
 - **Project List**: Sidebar with saved projects, click to load
 
 ## Tech Stack
 
 | Component | Technology |
 |-----------|-----------|
-| Backend | Python, FastAPI, uvicorn |
-| Frontend | React, TypeScript, Konva.js, Zustand |
+| Backend | Python 3.11+, FastAPI, uvicorn |
+| Frontend | React 18, TypeScript, Konva.js, Zustand |
 | Database | SQLite (via aiosqlite) |
-| LLM | AWS Bedrock (Claude) |
+| LLM | AWS Bedrock — Claude Sonnet 4.5 (cross-region) |
 | Image Analysis | OpenCV + Bedrock Vision API |
 | Data API | FRED API |
 | PDF Export | ReportLab + matplotlib |
@@ -54,7 +87,7 @@ A local web application for creating, customizing, and exporting FRBSF-branded e
 
 - Python 3.11+
 - Node.js 18+
-- AWS account with Bedrock access (Claude models enabled)
+- AWS account with Bedrock access (Claude Sonnet 4.5 enabled, cross-region inference)
 - FRED API key ([get one here](https://fred.stlouisfed.org/docs/api/api_key.html))
 
 ## Setup
@@ -82,8 +115,6 @@ cd ..
 
 ### 4. Configure API keys
 
-Copy the example config and fill in your keys:
-
 ```bash
 cp config.yaml.example config.yaml
 ```
@@ -93,11 +124,17 @@ Edit `config.yaml`:
 ```yaml
 fred_api_key: "your-fred-api-key"
 aws_region: "us-east-1"
-aws_access_key_id: "AKIA..."
+aws_access_key_id: "ASIA..."
 aws_secret_access_key: "your-secret-key"
 aws_session_token: "your-session-token"  # required for SSO/STS credentials
-bedrock_model_id: "anthropic.claude-3-sonnet-20240229-v1:0"
-bedrock_vision_model_id: "anthropic.claude-3-sonnet-20240229-v1:0"
+bedrock_model_id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+bedrock_vision_model_id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+```
+
+Note: If using AWS SSO, session tokens expire periodically. Refresh with:
+```bash
+aws sso login
+aws configure export-credentials --format env
 ```
 
 ## Running
@@ -108,9 +145,7 @@ bedrock_vision_model_id: "anthropic.claude-3-sonnet-20240229-v1:0"
 .\start-servers.ps1
 ```
 
-This starts the backend on port 8080 and frontend on port 5173. Open http://localhost:5173 in your browser.
-
-To stop:
+Starts backend (port 8080) and frontend (port 5173). Open http://localhost:5173.
 
 ```powershell
 .\stop-servers.ps1
@@ -118,17 +153,9 @@ To stop:
 
 ### Manual Start
 
-Backend:
-
 ```bash
 python -m uvicorn backend.main:app --reload --port 8080
-```
-
-Frontend:
-
-```bash
-cd frontend
-npm run dev
+cd frontend && npm run dev
 ```
 
 ## Running Tests
@@ -137,43 +164,40 @@ npm run dev
 python -m pytest tests/ -v
 ```
 
-211 unit tests covering all backend services.
-
 ## Project Structure
 
 ```
 ER_CHAI/
 ├── backend/
-│   ├── api/              # FastAPI routes and middleware
-│   ├── models/           # Pydantic data models
-│   ├── services/         # Business logic
-│   │   ├── ai_assistant.py      # AI chat handler (Bedrock)
+│   ├── api/                     # FastAPI routes, middleware, Bedrock status
+│   ├── models/schemas.py        # Pydantic models (30+ classes)
+│   ├── services/
+│   │   ├── ai_assistant.py      # AI chat (3 intents: chart_modify, data_qa, summary_update)
 │   │   ├── config.py            # YAML config loader
-│   │   ├── export_service.py    # Python/R/PDF export
-│   │   ├── fred_client.py       # FRED API client
-│   │   ├── image_analyzer.py    # OpenCV + Vision analysis
-│   │   ├── ingestion.py         # Data ingestion pipeline
-│   │   ├── project_store.py     # SQLite project persistence
-│   │   └── summary_generator.py # Executive summary (Bedrock)
-│   └── main.py           # FastAPI app entry point
-├── frontend/
-│   └── src/
-│       ├── api/           # Axios API client
-│       ├── components/    # React components
-│       │   ├── chart/     # Konva.js chart elements
-│       │   ├── AIChatWindow.tsx
-│       │   ├── CanvasEditor.tsx
-│       │   ├── ControlsPanel.tsx
-│       │   ├── ContextMenu.tsx
-│       │   ├── ExportToolbar.tsx
-│       │   ├── ProjectList.tsx
-│       │   └── SummaryEditor.tsx
-│       ├── store/         # Zustand state management
-│       └── types/         # TypeScript interfaces
-├── tests/                 # pytest test suite
-├── config.yaml.example    # Config template
-├── start-servers.ps1      # Start both servers
-└── stop-servers.ps1       # Stop both servers
+│   │   ├── export_service.py    # Python/R/PDF export with date-aware rendering
+│   │   ├── fred_client.py       # FRED API client with retry
+│   │   ├── image_analyzer.py    # OpenCV + Vision (20-field comprehensive analysis)
+│   │   ├── ingestion.py         # Data pipeline (URL, file, long-format pivot, image spec)
+│   │   ├── project_store.py     # SQLite CRUD
+│   │   └── summary_generator.py # Executive summary generation
+│   └── main.py                  # FastAPI app with Bedrock health check
+├── frontend/src/
+│   ├── api/client.ts            # Axios API client (15+ endpoints)
+│   ├── components/
+│   │   ├── chart/               # 7 Konva.js chart element components
+│   │   ├── AIChatWindow.tsx     # Floating AI chat with undo, summary updates
+│   │   ├── CanvasEditor.tsx     # Main canvas with date filtering, data rendering
+│   │   ├── ControlsPanel.tsx    # Full controls sidebar with annotation management
+│   │   ├── ContextMenu.tsx      # Right-click menu with rename, delete
+│   │   ├── ExportToolbar.tsx    # Python/R/PDF download buttons
+│   │   ├── ProjectList.tsx      # Save/load/delete with dataset reload
+│   │   └── SummaryEditor.tsx    # Editable summary with AI generation
+│   ├── store/appStore.ts        # Zustand state with undo history
+│   └── types/index.ts           # TypeScript interfaces
+├── tests/                       # 211 unit tests
+├── config.yaml.example
+├── start-servers.ps1
+└── stop-servers.ps1
 ```
 
 ## License

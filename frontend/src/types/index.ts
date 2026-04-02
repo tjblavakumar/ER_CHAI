@@ -63,7 +63,7 @@ export interface GridlineConfig {
 
 export interface AnnotationConfig {
   id: string;
-  type: string; // "text" | "vertical_band" | "horizontal_line"
+  type: string; // "text" | "vertical_band" | "horizontal_line" | "vertical_line"
   text: string | null;
   position: Position;
   font_size: number;

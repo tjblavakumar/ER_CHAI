@@ -143,6 +143,30 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ onApplyChange }) => {
           ))}
         </select>
       </div>
+
+      {/* Delete button for annotations */}
+      {contextMenuTarget.elementId.startsWith('annotation_') && (
+        <div style={{ marginTop: 10, borderTop: '1px solid #eee', paddingTop: 8 }}>
+          <button
+            onClick={() => {
+              onApplyChange(contextMenuTarget.elementId, '_delete', 1);
+            }}
+            style={{
+              width: '100%',
+              padding: '5px 0',
+              background: '#ffebee',
+              color: '#c62828',
+              border: '1px solid #ef9a9a',
+              borderRadius: 4,
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 600,
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      )}
     </div>
   );
 };

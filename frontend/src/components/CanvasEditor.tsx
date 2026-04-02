@@ -85,6 +85,11 @@ const CanvasEditor: React.FC = () => {
 
       if (elementId === 'title') {
         updated.title = { ...chartState.title, [property]: value };
+      } else if (elementId === 'x_label' || elementId === 'y_label') {
+        // Axis label font changes — map to axes config
+        if (property === 'font_size') {
+          updated.axes = { ...chartState.axes, label_font_size: value as number };
+        }
       } else if (elementId.startsWith('legend_entry_')) {
         const seriesName = elementId.replace('legend_entry_', '');
         updated.legend = {
@@ -97,9 +102,14 @@ const CanvasEditor: React.FC = () => {
         };
       } else if (elementId.startsWith('annotation_')) {
         const annId = elementId.replace('annotation_', '');
-        updated.annotations = chartState.annotations.map((a) =>
-          a.id === annId ? { ...a, [property]: value } : a,
-        );
+        if (property === '_delete') {
+          // Remove the annotation
+          updated.annotations = chartState.annotations.filter((a) => a.id !== annId);
+        } else {
+          updated.annotations = chartState.annotations.map((a) =>
+            a.id === annId ? { ...a, [property]: value } : a,
+          );
+        }
       } else if (elementId === 'data_table' && chartState.data_table) {
         if (property === 'font_size') {
           updated.data_table = { ...chartState.data_table, font_size: value as number };

@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 import pandas as pd
-from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
 
 from backend.models.schemas import (
@@ -62,6 +62,42 @@ def init_routes(
 async def health_check():
     """Return a simple health status."""
     return {"status": "ok"}
+
+
+@router.get("/bedrock/status")
+async def bedrock_status(request: Request):
+    """Check and return Bedrock connection status. Runs the check on first call."""
+    import asyncio as _aio
+    import json as _json
+
+    status = getattr(request.app.state, "bedrock_status", {})
+
+    # If not checked yet, do it now
+    if status.get("error") == "Not checked yet":
+        try:
+            client = request.app.state.bedrock_client
+            model_id = request.app.state.bedrock_model_id
+            test_body = _json.dumps({
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 10,
+                "messages": [{"role": "user", "content": "hi"}],
+            })
+            resp = await _aio.to_thread(
+                client.invoke_model,
+                modelId=model_id,
+                contentType="application/json",
+                accept="application/json",
+                body=test_body,
+            )
+            resp["body"].read()
+            status["active"] = True
+            status["error"] = ""
+        except Exception as exc:
+            status["active"] = False
+            status["error"] = str(exc)
+        request.app.state.bedrock_status = status
+
+    return status
 
 
 # ---------------------------------------------------------------------------

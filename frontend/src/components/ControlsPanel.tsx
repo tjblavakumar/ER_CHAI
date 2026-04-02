@@ -416,8 +416,23 @@ const ControlsPanel: React.FC = () => {
       <Section title="Annotations">
         {annotations.map((ann, idx) => (
           <div key={ann.id} style={{ marginBottom: 8, padding: 6, background: '#f5f5f5', borderRadius: 4 }}>
-            <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11 }}>
-              {ann.type === 'text' ? `Text: ${ann.text ?? ''}` : `Band: ${ann.id}`}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <span style={{ fontWeight: 600, fontSize: 11 }}>
+                {ann.type === 'text' ? `Text: ${ann.text ?? ''}` :
+                 ann.type === 'horizontal_line' ? `H-Line: ${ann.line_value ?? ''}` :
+                 ann.type === 'vertical_line' ? `V-Line: ${ann.text ?? ann.line_value ?? ''}` :
+                 `V-Band: ${ann.band_start ?? ''} - ${ann.band_end ?? ''}`}
+              </span>
+              <button
+                onClick={() => {
+                  const updated = annotations.filter((_, i) => i !== idx);
+                  patch({ annotations: updated });
+                }}
+                style={{ background: 'none', border: 'none', color: '#c00', cursor: 'pointer', fontSize: 13, padding: '0 2px' }}
+                title="Delete annotation"
+              >
+                ✕
+              </button>
             </div>
             {ann.type === 'text' && (
               <>
@@ -525,6 +540,45 @@ const ControlsPanel: React.FC = () => {
                 </Field>
               </>
             )}
+            {ann.type === 'vertical_line' && (
+              <>
+                <Field label="Date/Year">
+                  <input
+                    type="text"
+                    value={ann.line_value ?? ''}
+                    onChange={(e) => patchAnnotation(idx, { line_value: isNaN(Number(e.target.value)) ? e.target.value : Number(e.target.value) as unknown as number })}
+                    placeholder="2008 or 2008-03"
+                    style={{ width: '100%' }}
+                  />
+                </Field>
+                <Field label="Label">
+                  <input
+                    type="text"
+                    value={ann.text ?? ''}
+                    onChange={(e) => patchAnnotation(idx, { text: e.target.value })}
+                    style={{ width: '100%' }}
+                  />
+                </Field>
+                <Field label="Line Color">
+                  <input
+                    type="color"
+                    value={ann.line_color ?? '#FF0000'}
+                    onChange={(e) => patchAnnotation(idx, { line_color: e.target.value })}
+                  />
+                </Field>
+                <Field label="Line Style">
+                  <select
+                    value={ann.line_style ?? 'solid'}
+                    onChange={(e) => patchAnnotation(idx, { line_style: e.target.value })}
+                    style={{ width: '100%' }}
+                  >
+                    <option value="solid">Solid</option>
+                    <option value="dashed">Dashed</option>
+                    <option value="dotted">Dotted</option>
+                  </select>
+                </Field>
+              </>
+            )}
             <Field label="X">
               <input
                 type="number"
@@ -617,6 +671,29 @@ const ControlsPanel: React.FC = () => {
             }}
           >
             + V-Band
+          </button>
+          <button
+            style={{ flex: 1, fontSize: 11, padding: '3px 0' }}
+            onClick={() => {
+              const newAnn = {
+                id: `ann_${Date.now()}`,
+                type: 'vertical_line' as const,
+                text: 'Event',
+                position: { x: 200, y: 0 },
+                font_size: 10,
+                font_color: '#FF0000',
+                band_start: null,
+                band_end: null,
+                band_color: null,
+                line_value: 2020,
+                line_color: '#FF0000',
+                line_style: 'solid',
+                line_width: 1.5,
+              };
+              patch({ annotations: [...annotations, newAnn] });
+            }}
+          >
+            + V-Line
           </button>
         </div>
       </Section>

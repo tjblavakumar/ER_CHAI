@@ -17,15 +17,29 @@ function buildChartContext(chartState: ChartState): ChartContext {
 
 function applyDelta(state: ChartState, delta: ChartConfigDelta): ChartState {
   // Merge annotations: append new ones, update existing by id
+  // If _replace_annotations flag is set, do full replacement (for removals)
   let mergedAnnotations = state.annotations;
   if (delta.annotations != null) {
-    const existingIds = new Set(state.annotations.map((a) => a.id));
-    const updated = state.annotations.map((existing) => {
-      const replacement = delta.annotations!.find((d) => d.id === existing.id);
-      return replacement ?? existing;
-    });
-    const newOnes = delta.annotations.filter((d) => !existingIds.has(d.id));
-    mergedAnnotations = [...updated, ...newOnes];
+    // Check for delete markers — any annotation with _delete flag
+    const deleteIds = new Set(
+      (delta.annotations as unknown as Array<Record<string, unknown>>)
+        .filter((a) => a._delete === true)
+        .map((a) => a.id as string),
+    );
+
+    if (deleteIds.size > 0) {
+      // Remove annotations with matching IDs
+      mergedAnnotations = state.annotations.filter((a) => !deleteIds.has(a.id));
+    } else {
+      // Normal merge: append new, update existing
+      const existingIds = new Set(state.annotations.map((a) => a.id));
+      const updated = state.annotations.map((existing) => {
+        const replacement = delta.annotations!.find((d) => d.id === existing.id);
+        return replacement ?? existing;
+      });
+      const newOnes = delta.annotations.filter((d) => !existingIds.has(d.id));
+      mergedAnnotations = [...updated, ...newOnes];
+    }
   }
 
   // When global chart_type changes, propagate to all series
@@ -202,12 +216,25 @@ const AIChatWindow: React.FC = () => {
         // Apply delta — setChartState auto-pushes to undo history
         const newState = applyDelta(chartState, response.chart_delta);
         setChartState(newState);
-        setLastModifyIndex(chatMessages.length + 1); // index of the assistant msg about to be added
+        setLastModifyIndex(chatMessages.length + 1);
 
         addChatMessage({
           role: 'assistant',
           content: response.message,
           chartDelta: response.chart_delta,
+          timestamp: new Date().toISOString(),
+        });
+      } else if (response.type === 'summary_update') {
+        // Append to executive summary
+        const currentSummary = useAppStore.getState().summaryText;
+        const newSummary = currentSummary
+          ? `${currentSummary}\n\n${response.message}`
+          : response.message;
+        useAppStore.getState().setSummaryText(newSummary);
+
+        addChatMessage({
+          role: 'assistant',
+          content: 'Updated the executive summary.',
           timestamp: new Date().toISOString(),
         });
       } else {

@@ -59,7 +59,7 @@ class ImageAnalyzer:
     """Orchestrates OpenCV + Bedrock Vision analysis of reference chart images."""
 
     def __init__(self, bedrock_client: Any | None = None, *, region: str = "us-east-1",
-                 vision_model_id: str = "anthropic.claude-3-sonnet-20240229-v1:0") -> None:
+                 vision_model_id: str = "us.anthropic.claude-sonnet-4-5-20250929-v1:0") -> None:
         self._bedrock = bedrock_client or boto3.client(
             "bedrock-runtime", region_name=region,
         )
@@ -224,10 +224,26 @@ class ImageAnalyzer:
                 accept="application/json",
                 body=body,
             )
-            response_body = json.loads(response["body"].read())
+            raw_body = response["body"].read()
+            if not raw_body:
+                raise ValueError("Empty response from Bedrock Vision API")
+            response_body = json.loads(raw_body)
             text_content = response_body["content"][0]["text"]
-            logger.info("Vision API raw response: %s", text_content[:1000])
-            parsed = json.loads(text_content)
+            logger.info("Vision API raw response (first 500 chars): %s", text_content[:500])
+
+            # Strip markdown fences if present
+            cleaned = text_content.strip()
+            if cleaned.startswith("```"):
+                lines = cleaned.split("\n")
+                lines = [l for l in lines if not l.strip().startswith("```")]
+                cleaned = "\n".join(lines).strip()
+
+            parsed = json.loads(cleaned)
+        except json.JSONDecodeError as jexc:
+            logger.error("Vision API returned non-JSON: %s", text_content[:500] if 'text_content' in dir() else "no content")
+            raise ValueError(
+                f"Bedrock Vision analysis failed — could not parse response as JSON: {jexc}"
+            ) from jexc
         except Exception as exc:
             raise ValueError(
                 f"Bedrock Vision analysis failed: {exc}"

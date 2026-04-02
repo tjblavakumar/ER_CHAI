@@ -78,6 +78,11 @@ async def lifespan(app: FastAPI):
         project_store=project_store,
     )
 
+    # Bedrock status — checked lazily via /api/bedrock/status endpoint
+    app.state.bedrock_status = {"active": False, "model": config.bedrock_model_id, "error": "Not checked yet"}
+    app.state.bedrock_client = bedrock_client
+    app.state.bedrock_model_id = config.bedrock_model_id
+
     logger.info("FRBSF Chart Builder started successfully.")
     yield
 

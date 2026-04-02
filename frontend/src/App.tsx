@@ -241,6 +241,42 @@ const DataIngestionBar: React.FC = () => {
 };
 
 // ---------------------------------------------------------------------------
+// Bedrock Status Indicator
+// ---------------------------------------------------------------------------
+
+const BedrockStatus: React.FC = () => {
+  const [status, setStatus] = useState<{ active: boolean; model: string; error: string } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/bedrock/status')
+      .then((r) => r.json())
+      .then(setStatus)
+      .catch(() => setStatus({ active: false, model: '', error: 'Unable to check' }));
+  }, []);
+
+  if (!status) return null;
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        fontSize: 11,
+        color: status.active ? '#2e7d32' : '#c62828',
+        padding: '2px 8px',
+        borderRadius: 4,
+        background: status.active ? '#e8f5e9' : '#ffebee',
+      }}
+      title={status.active ? `Model: ${status.model}` : `Error: ${status.error}`}
+    >
+      <span style={{ fontSize: 8 }}>{status.active ? '●' : '●'}</span>
+      {status.active ? 'Bedrock Active' : 'Bedrock Offline'}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // App Shell (Req 6.1, 9.1, 10.1, 12.4, 2.5)
 // ---------------------------------------------------------------------------
 
@@ -329,7 +365,10 @@ const App: React.FC = () => {
             }}
           >
             <h1 style={{ fontSize: 18, margin: 0 }}>FRBSF Chart Builder</h1>
-            <ExportToolbar />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <BedrockStatus />
+              <ExportToolbar />
+            </div>
           </header>
 
           {/* Data ingestion bar */}

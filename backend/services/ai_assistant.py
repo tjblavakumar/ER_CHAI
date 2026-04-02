@@ -46,7 +46,7 @@ class AIAssistantHandler:
         bedrock_client: Any | None = None,
         *,
         region: str = "us-east-1",
-        model_id: str = "anthropic.claude-3-sonnet-20240229-v1:0",
+        model_id: str = "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
     ) -> None:
         self._bedrock = bedrock_client or boto3.client(
             "bedrock-runtime", region_name=region,
@@ -75,7 +75,6 @@ class AIAssistantHandler:
 
         if intent == "chart_modify":
             delta = await self._handle_chart_modify(session_id, message, chart_context)
-            # Store the exchange in session history
             self._sessions[session_id].append({"role": "user", "content": message})
             self._sessions[session_id].append({
                 "role": "assistant",
@@ -86,9 +85,17 @@ class AIAssistantHandler:
                 message="I've applied the requested chart modifications.",
                 chart_delta=delta,
             )
+        elif intent == "summary_update":
+            summary_text = await self._handle_summary_update(session_id, message, chart_context)
+            self._sessions[session_id].append({"role": "user", "content": message})
+            self._sessions[session_id].append({"role": "assistant", "content": summary_text})
+            return AIResponse(
+                type="summary_update",
+                message=summary_text,
+                chart_delta=None,
+            )
         else:
             answer = await self._handle_data_qa(session_id, message, chart_context)
-            # Store the exchange in session history
             self._sessions[session_id].append({"role": "user", "content": message})
             self._sessions[session_id].append({"role": "assistant", "content": answer})
             return AIResponse(
@@ -105,8 +112,8 @@ class AIAssistantHandler:
 
     async def _classify_intent(
         self, message: str
-    ) -> Literal["chart_modify", "data_qa"]:
-        """Use Bedrock to classify *message* as chart modification or data Q&A."""
+    ) -> Literal["chart_modify", "data_qa", "summary_update"]:
+        """Use Bedrock to classify *message*."""
         prompt = (
             "You are an intent classifier for a chart editing application.\n"
             "Classify the following user message into exactly one category:\n"
@@ -114,10 +121,12 @@ class AIAssistantHandler:
             "(e.g., change chart type, colors, fonts, add annotations, "
             "modify axes, update title, legend, gridlines, etc.)\n"
             '- "data_qa": The user is asking a question about the data '
-            "(e.g., trends, peaks, values, comparisons, explanations)\n\n"
+            "(e.g., trends, peaks, values, comparisons, explanations)\n"
+            '- "summary_update": The user wants to update, append to, or modify '
+            "the executive summary text (e.g., 'append this to summary', "
+            "'update the executive summary', 'add this info to summary')\n\n"
             f"User message: {message}\n\n"
-            "Respond with ONLY the category name, nothing else. "
-            'Either "chart_modify" or "data_qa".'
+            "Respond with ONLY the category name, nothing else."
         )
 
         response_text = await self._invoke_bedrock(prompt)
@@ -125,6 +134,8 @@ class AIAssistantHandler:
 
         if "chart_modify" in cleaned:
             return "chart_modify"
+        if "summary_update" in cleaned:
+            return "summary_update"
         if "data_qa" in cleaned:
             return "data_qa"
 
@@ -184,7 +195,10 @@ class AIAssistantHandler:
             '"text": "Target 2%", "line_color": "#cc0000", "line_style": "dotted"}]}\n'
             "IMPORTANT: When adding annotations, include ONLY the NEW annotation(s) "
             "in the annotations array. Do NOT include existing annotations — they will "
-            "be preserved automatically. Each annotation needs a unique id.\n\n"
+            "be preserved automatically. Each annotation needs a unique id.\n"
+            "To REMOVE an annotation, include it in the annotations array with its id "
+            'and add "_delete": true. Example: {"annotations": [{"id": "financial_crisis_line", "_delete": true}]}\n'
+            "You can remove multiple annotations at once by including multiple objects with _delete.\n\n"
             "CHART TYPE: When changing chart_type to 'area', set chart_type at the top level. "
             "The system will automatically propagate it to all series.\n\n"
             "IMPORTANT: If you include 'series' in the delta, each series object "
@@ -229,6 +243,37 @@ class AIAssistantHandler:
             "Provide a clear, concise answer based on the dataset information. "
             "Use only the provided data and your knowledge. "
             "Do not perform web searches."
+        )
+
+        return await self._invoke_bedrock(prompt)
+
+    # -- Summary update -----------------------------------------------------
+
+    async def _handle_summary_update(
+        self,
+        session_id: str,
+        message: str,
+        chart_context: ChartContext,
+    ) -> str:
+        """Generate text to append to the executive summary."""
+        history = self._sessions.get(session_id, [])
+        history_text = ""
+        if history:
+            history_text = "Previous conversation:\n"
+            for entry in history[-10:]:
+                history_text += f"{entry['role']}: {entry['content']}\n"
+            history_text += "\n"
+
+        prompt = (
+            "You are an AI assistant for an FRBSF chart editing application.\n"
+            "The user wants to update the executive summary. Based on the "
+            "conversation history, generate the text that should be appended "
+            "to the executive summary.\n\n"
+            f"{history_text}"
+            f"User request: {message}\n\n"
+            "Generate ONLY the text to append to the summary. "
+            "Write in a professional, concise style suitable for an executive audience. "
+            "Do not include any JSON or chart modifications."
         )
 
         return await self._invoke_bedrock(prompt)
@@ -316,6 +361,16 @@ class AIAssistantHandler:
             existing_axes = current_chart_state.axes.model_dump()
             data["axes"] = {**existing_axes, **data["axes"]}
 
+        # Merge partial data_table with current chart state
+        if "data_table" in data and isinstance(data["data_table"], dict) and current_chart_state:
+            existing_dt = (current_chart_state.data_table.model_dump()
+                           if current_chart_state.data_table else {
+                               "visible": False, "position": {"x": 70, "y": 490},
+                               "columns": current_chart_state.dataset_columns,
+                               "font_size": 10, "max_rows": 5,
+                           })
+            data["data_table"] = {**existing_dt, **data["data_table"]}
+
         # Merge partial legend with current chart state
         if "legend" in data and isinstance(data["legend"], dict) and current_chart_state:
             existing_legend = current_chart_state.legend.model_dump()
@@ -356,12 +411,23 @@ class AIAssistantHandler:
 
         # Merge / fix annotations from LLM output
         if "annotations" in data and isinstance(data["annotations"], list):
-            _TYPE_MAP = {"line": "horizontal_line", "hline": "horizontal_line", "vband": "vertical_band"}
-            _SUPPORTED_TYPES = {"text", "vertical_band", "horizontal_line"}
+            _TYPE_MAP = {"line": "horizontal_line", "hline": "horizontal_line", "vband": "vertical_band", "vline": "vertical_line"}
+            _SUPPORTED_TYPES = {"text", "vertical_band", "horizontal_line", "vertical_line"}
             fixed_annotations: list[dict] = []
             for idx, ann in enumerate(data["annotations"]):
                 if not isinstance(ann, dict):
                     continue
+
+                # Handle deletion markers — pass through with minimal fields
+                if ann.get("_delete"):
+                    fixed_annotations.append({
+                        "id": ann.get("id", f"ann_{idx}"),
+                        "type": "text",
+                        "position": {"x": 0, "y": 0},
+                        "_delete": True,
+                    })
+                    continue
+
                 # Generate id if missing
                 if "id" not in ann:
                     ann["id"] = f"ann_{idx}"
@@ -391,6 +457,12 @@ class AIAssistantHandler:
                         ann["line_value"] = ann.get("value", ann.get("y_value", ann.get("y", 0)))
                     ann.setdefault("line_color", "#cc0000")
                     ann.setdefault("line_style", "dotted")
+                # Fill in vertical_line defaults
+                if ann["type"] == "vertical_line":
+                    if "line_value" not in ann:
+                        ann["line_value"] = ann.get("value", ann.get("x_value", ann.get("position", {}).get("x", 0)))
+                    ann.setdefault("line_color", "#FF0000")
+                    ann.setdefault("line_style", "solid")
                     ann.setdefault("line_width", 1.5)
                 fixed_annotations.append(ann)
             data["annotations"] = fixed_annotations

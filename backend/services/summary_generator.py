@@ -40,7 +40,7 @@ class SummaryGenerator:
         bedrock_client: Any | None = None,
         *,
         region: str = "us-east-1",
-        model_id: str = "anthropic.claude-3-sonnet-20240229-v1:0",
+        model_id: str = "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
     ) -> None:
         self._bedrock = bedrock_client or boto3.client(
             "bedrock-runtime", region_name=region,

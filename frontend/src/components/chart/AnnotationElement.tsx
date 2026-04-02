@@ -28,11 +28,31 @@ function dashForStyle(style: string): number[] | undefined {
 function dateToFraction(dateStr: string, xLabels: string[]): number | null {
   if (!dateStr || xLabels.length === 0) return null;
   const needle = dateStr.trim();
-  const idx = xLabels.findIndex((lbl) => lbl.startsWith(needle) || needle.startsWith(lbl));
+
+  // Direct prefix match
+  let idx = xLabels.findIndex((lbl) => lbl.startsWith(needle) || needle.startsWith(lbl));
   if (idx >= 0) return idx / Math.max(xLabels.length - 1, 1);
+
+  // If needle is a pure year number (e.g., "2008"), try "2008-01"
+  if (/^\d{4}(\.\d+)?$/.test(needle)) {
+    const year = Math.floor(Number(needle));
+    const frac = Number(needle) - year; // e.g., 2001.75 -> 0.75
+    const month = Math.round(frac * 12) + 1;
+    const datePrefix = `${year}-${String(month).padStart(2, '0')}`;
+    idx = xLabels.findIndex((lbl) => lbl.startsWith(datePrefix));
+    if (idx >= 0) return idx / Math.max(xLabels.length - 1, 1);
+    // Try just the year
+    idx = xLabels.findIndex((lbl) => lbl.startsWith(String(year)));
+    if (idx >= 0) return idx / Math.max(xLabels.length - 1, 1);
+  }
+
   // Try parsing as date and finding closest
-  const target = new Date(needle).getTime();
+  let target = new Date(needle).getTime();
+  if (isNaN(target) && /^\d{4}$/.test(needle)) {
+    target = new Date(`${needle}-01-01`).getTime();
+  }
   if (isNaN(target)) return null;
+
   let bestIdx = 0;
   let bestDist = Infinity;
   for (let i = 0; i < xLabels.length; i++) {
@@ -93,6 +113,48 @@ const AnnotationElement: React.FC<AnnotationElementProps> = ({
             fontSize={config.font_size}
             fontFamily="Arial"
             fill={config.line_color ?? '#cc0000'}
+          />
+        )}
+      </Group>
+    );
+  }
+
+  // Vertical line at a specific x-axis date/value position
+  if (config.type === 'vertical_line') {
+    const dash = dashForStyle(config.line_style ?? 'solid');
+    const label = config.text ?? '';
+
+    // Try to find x position from line_value as a date or from xLabels
+    let px = config.position.x;
+    if (xLabels && xLabels.length > 0 && config.line_value != null) {
+      // line_value might be a year like 2008 or a date string
+      const valStr = String(config.line_value);
+      const frac = dateToFraction(valStr, xLabels);
+      if (frac != null) {
+        px = chartArea.x + frac * chartArea.width;
+      }
+    }
+
+    return (
+      <Group
+        draggable={draggable}
+        onDragEnd={(e) => onDragEnd?.(elementId, e.target.x(), e.target.y())}
+      >
+        <Line
+          points={[px, chartArea.y, px, chartArea.y + chartArea.height]}
+          stroke={config.line_color ?? '#cc0000'}
+          strokeWidth={config.line_width ?? 1.5}
+          dash={dash}
+        />
+        {label && (
+          <Text
+            x={px + 4}
+            y={chartArea.y + 2}
+            text={label}
+            fontSize={config.font_size}
+            fontFamily="Arial"
+            fill={config.line_color ?? '#cc0000'}
+            rotation={90}
           />
         )}
       </Group>

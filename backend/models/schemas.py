@@ -14,8 +14,8 @@ class AppConfig(BaseModel):
     aws_access_key_id: str | None = None
     aws_secret_access_key: str | None = None
     aws_session_token: str | None = None
-    bedrock_model_id: str = "anthropic.claude-3-sonnet-20240229-v1:0"
-    bedrock_vision_model_id: str = "anthropic.claude-3-sonnet-20240229-v1:0"
+    bedrock_model_id: str = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+    bedrock_vision_model_id: str = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
 
 # --- Data ---
@@ -208,7 +208,7 @@ class GridlineConfig(BaseModel):
 
 class AnnotationConfig(BaseModel):
     id: str
-    type: str  # "text" | "vertical_band" | "horizontal_line"
+    type: str  # "text" | "vertical_band" | "horizontal_line" | "vertical_line"
     text: str | None = None
     position: Position
     font_size: int = 10
