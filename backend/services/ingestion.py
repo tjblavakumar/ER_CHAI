@@ -20,6 +20,7 @@ from backend.models.schemas import (
     ChartElementState,
     ChartSpecification,
     ChartState,
+    ComputedColumnDefinition,
     DatasetInfo,
     DataTableConfig,
     GridlineConfig,
@@ -424,6 +425,35 @@ def _detect_and_pivot_long_format(df: pd.DataFrame) -> pd.DataFrame:
         return df
 
 
+def _compute_derived_value(
+    formula: str,
+    operand_values: list[float | None],
+) -> float | None:
+    """Compute a derived value from operand values using the given formula.
+
+    Supports "difference" (a - b) and "percent_change" ((a - b) / b * 100).
+    Returns None for division by zero, missing operands, or unrecognized formulas.
+    """
+    if formula == "difference":
+        if len(operand_values) < 2:
+            return None
+        a, b = operand_values[0], operand_values[1]
+        if a is None or b is None:
+            return None
+        return a - b
+    elif formula == "percent_change":
+        if len(operand_values) < 2:
+            return None
+        a, b = operand_values[0], operand_values[1]
+        if a is None or b is None:
+            return None
+        if b == 0:
+            return None
+        return (a - b) / b * 100
+    else:
+        return None
+
+
 def _build_chart_state_from_df(
     *,
     df: pd.DataFrame,
@@ -517,7 +547,7 @@ def _build_chart_state_from_df(
     data_table = DataTableConfig(
         visible=True,
         position=Position(x=70, y=490),
-        columns=columns,
+        columns=numeric_cols,
         font_size=10,
         max_rows=5,
     )
@@ -670,21 +700,65 @@ def _apply_image_spec_to_chart_state(
         position=chart_state.title.position,
     )
 
-    # Data table
+    # Data table — always use actual DataFrame numeric column names for value lookups
+    numeric_only_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
     data_table = chart_state.data_table
     if spec.data_table is not None:
+        max_rows = spec.data_table.num_sampled_dates if spec.data_table.num_sampled_dates else 5
         data_table = DataTableConfig(
             visible=spec.data_table.visible,
             position=chart_state.data_table.position if chart_state.data_table else Position(x=70, y=490),
-            columns=list(df.columns) if not spec.data_table.columns else spec.data_table.columns,
+            columns=numeric_only_cols,
             font_size=spec.data_table.font_size,
-            max_rows=5,
+            max_rows=max_rows,
         )
+
+        # Computed column processing
+        if spec.data_table.computed_columns:
+            data_table.computed_columns = list(spec.data_table.computed_columns)
+
+            # Compute sampled indices (same logic as frontend DataTableElement)
+            total_rows = len(df)
+            count = min(data_table.max_rows, total_rows)
+            if count <= 0:
+                sampled_indices: list[int] = []
+            else:
+                sampled_indices = [
+                    round((i * (total_rows - 1)) / max(count - 1, 1))
+                    for i in range(count)
+                ]
+
+            computed_values: dict[str, float | None] = {}
+            for series_col in numeric_only_cols:
+                for cc in spec.data_table.computed_columns:
+                    # Resolve operand indices (negative indices reference from end of sampled_indices)
+                    operand_values: list[float | None] = []
+                    for op_idx in cc.operands:
+                        # Resolve negative index relative to sampled_indices
+                        resolved = op_idx if op_idx >= 0 else len(sampled_indices) + op_idx
+                        if 0 <= resolved < len(sampled_indices):
+                            row_idx = sampled_indices[resolved]
+                            if 0 <= row_idx < total_rows:
+                                val = df[series_col].iloc[row_idx]
+                                if pd.isna(val):
+                                    operand_values.append(None)
+                                else:
+                                    operand_values.append(float(val))
+                            else:
+                                operand_values.append(None)
+                        else:
+                            operand_values.append(None)
+
+                    result = _compute_derived_value(cc.formula, operand_values)
+                    computed_values[f"{series_col}:{cc.label}"] = result
+
+            data_table.computed_values = computed_values
+
     elif data_table is None:
         data_table = DataTableConfig(
             visible=True,
             position=Position(x=70, y=490),
-            columns=list(df.columns),
+            columns=numeric_only_cols,
             font_size=10,
             max_rows=5,
         )

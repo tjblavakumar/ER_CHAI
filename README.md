@@ -51,8 +51,13 @@ A local web application for creating, customizing, and exporting FRBSF-branded e
 
 ### 7. Data Table
 - **Transposed Layout**: Rows = data series, Columns = sampled dates
+- **Numeric-only Columns**: Automatically excludes date columns from data table rows
+- **Series-colored Text**: Row labels and values use the corresponding data series color
+- **Computed Columns**: Vision analysis detects derived columns from reference images (e.g., "chg" for month-over-month change) and computes them from actual data
+- **Dynamic Structure**: Data table structure is driven by the reference image — nothing hardcoded
 - **Customizable**: Select which columns to show, max date columns, font size
 - **Legend-synced**: Row labels use legend entry names
+- **Draggable**: Float the data table anywhere on the canvas
 
 ### 8. Executive Summary
 - **Auto-generated**: Trend analysis, peaks/troughs, predictions, economist perspective
@@ -194,7 +199,7 @@ ER_CHAI/
 │   │   └── SummaryEditor.tsx    # Editable summary with AI generation
 │   ├── store/appStore.ts        # Zustand state with undo history
 │   └── types/index.ts           # TypeScript interfaces
-├── tests/                       # 211 unit tests
+├── tests/                       # 255 tests (unit + property-based)
 ├── config.yaml.example
 ├── start-servers.ps1
 └── stop-servers.ps1

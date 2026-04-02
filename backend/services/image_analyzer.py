@@ -21,6 +21,7 @@ from backend.models.schemas import (
     AnnotationSpec,
     AxisConfig,
     ChartSpecification,
+    ComputedColumnDefinition,
     ContourInfo,
     DataTableSpec,
     FontSpec,
@@ -176,7 +177,21 @@ class ImageAnalyzer:
             '   Look for shaded/highlighted rectangular regions spanning the chart height.\n\n'
             "DATA TABLE:\n"
             '18. "data_table": if a data table is visible below/beside the chart:\n'
-            '   {"columns": [column_names], "visible": true, "font_size": 10}\n'
+            '   {"columns": [column_names], "visible": true, "font_size": 10,\n'
+            '    "layout": "transposed" or "standard" (transposed = dates as columns and series as rows),\n'
+            '    "num_sampled_dates": number of date columns shown (integer),\n'
+            '    "series_shown": [list of series names in the table],\n'
+            '    "computed_columns": array of any computed/derived columns detected in the table.\n'
+            "     Look for columns whose values are derived from other columns (e.g., a column showing\n"
+            "     the change or difference between two date columns, or a percentage change column).\n"
+            "     For each computed column found, provide:\n"
+            '     [{"label": "column header text as shown (e.g. chg)",\n'
+            '       "formula": "difference" if it shows value_a - value_b, or '
+            '"percent_change" if it shows (value_a - value_b) / value_b * 100,\n'
+            '       "operands": [index_a, index_b] where indices reference sampled date columns '
+            "using negative indexing (-1 = last date column, -2 = second-to-last, etc.)}]\n"
+            "     Set to [] if no computed/derived columns are detected.\n"
+            "   }\n"
             "   Set to null if no data table is visible.\n\n"
             "LAYOUT:\n"
             '19. "layout_description": detailed description of the overall layout, '
@@ -468,10 +483,37 @@ class ImageAnalyzer:
         data_table: DataTableSpec | None = None
         raw_dt = data.get("data_table")
         if raw_dt and isinstance(raw_dt, dict):
+            computed_columns: list[ComputedColumnDefinition] = []
+            for cc in raw_dt.get("computed_columns") or []:
+                if not isinstance(cc, dict):
+                    logger.warning("Skipping malformed computed_column entry (not a dict): %s", cc)
+                    continue
+                label = cc.get("label")
+                formula = cc.get("formula")
+                operands = cc.get("operands")
+                if not label or not formula or operands is None:
+                    logger.warning(
+                        "Skipping malformed computed_column entry (missing fields): %s", cc,
+                    )
+                    continue
+                try:
+                    computed_columns.append(ComputedColumnDefinition(
+                        label=label,
+                        formula=formula,
+                        operands=operands,
+                    ))
+                except Exception:
+                    logger.warning("Skipping invalid computed_column entry: %s", cc)
+                    continue
+
             data_table = DataTableSpec(
                 columns=raw_dt.get("columns", []),
                 visible=raw_dt.get("visible", False),
                 font_size=raw_dt.get("font_size", 10),
+                layout=raw_dt.get("layout", "transposed"),
+                num_sampled_dates=raw_dt.get("num_sampled_dates"),
+                series_shown=raw_dt.get("series_shown"),
+                computed_columns=computed_columns,
             )
 
         return VisionResult(

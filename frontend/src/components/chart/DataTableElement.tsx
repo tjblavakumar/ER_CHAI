@@ -6,6 +6,7 @@ interface DataTableElementProps {
   config: DataTableConfig;
   datasetRows?: Record<string, unknown>[] | null;
   seriesLabels?: Record<string, string>;
+  seriesColors?: Record<string, string>;
   draggable?: boolean;
   onDragEnd?: (id: string, x: number, y: number) => void;
   onContextMenu?: (id: string, x: number, y: number) => void;
@@ -43,6 +44,7 @@ const DataTableElement: React.FC<DataTableElementProps> = ({
   config,
   datasetRows,
   seriesLabels,
+  seriesColors,
   draggable = true,
   onDragEnd,
   onContextMenu,
@@ -77,10 +79,12 @@ const DataTableElement: React.FC<DataTableElementProps> = ({
   );
 
   const seriesCols = config.columns; // numeric series column names
+  const computedCols = config.computed_columns ?? [];
+  const computedValues = config.computed_values ?? {};
   const numDateCols = dateHeaders.length;
   const numRows = seriesCols.length;
 
-  const tableWidth = SERIES_COL_WIDTH + numDateCols * DATE_COL_WIDTH;
+  const tableWidth = SERIES_COL_WIDTH + (numDateCols + computedCols.length) * DATE_COL_WIDTH;
   const tableHeight = HEADER_HEIGHT + numRows * ROW_HEIGHT;
 
   return (
@@ -137,6 +141,22 @@ const DataTableElement: React.FC<DataTableElementProps> = ({
         />
       ))}
 
+      {/* Computed column headers */}
+      {computedCols.map((cc, i) => (
+        <Text
+          key={`cch-${i}`}
+          x={SERIES_COL_WIDTH + (numDateCols + i) * DATE_COL_WIDTH + 4}
+          y={5}
+          text={cc.label}
+          fontSize={config.font_size}
+          fontFamily="Arial"
+          fontStyle="bold"
+          fill="#333"
+          width={DATE_COL_WIDTH - 8}
+          ellipsis
+        />
+      ))}
+
       {/* Header separator */}
       <Line points={[0, HEADER_HEIGHT, tableWidth, HEADER_HEIGHT]} stroke="#999" strokeWidth={1} />
 
@@ -153,7 +173,7 @@ const DataTableElement: React.FC<DataTableElementProps> = ({
               fontSize={config.font_size}
               fontFamily="Arial"
               fontStyle="bold"
-              fill="#333"
+              fill={seriesColors?.[col] ?? "#333"}
               width={SERIES_COL_WIDTH - 8}
               ellipsis
             />
@@ -166,11 +186,29 @@ const DataTableElement: React.FC<DataTableElementProps> = ({
                 text={hasData ? formatCellValue(datasetRows[dataIdx][col]) : '—'}
                 fontSize={config.font_size}
                 fontFamily="Arial"
-                fill="#333"
+                fill={seriesColors?.[seriesCols[rowIdx]] ?? "#333"}
                 width={DATE_COL_WIDTH - 8}
                 ellipsis
               />
             ))}
+            {/* Computed column cells */}
+            {computedCols.map((cc, ccIdx) => {
+              const key = `${col}:${cc.label}`;
+              const val = computedValues[key];
+              return (
+                <Text
+                  key={`cc-${rowIdx}-${ccIdx}`}
+                  x={SERIES_COL_WIDTH + (numDateCols + ccIdx) * DATE_COL_WIDTH + 4}
+                  y={HEADER_HEIGHT + rowIdx * ROW_HEIGHT + 4}
+                  text={val != null ? val.toFixed(2) : '—'}
+                  fontSize={config.font_size}
+                  fontFamily="Arial"
+                  fill={seriesColors?.[col] ?? "#333"}
+                  width={DATE_COL_WIDTH - 8}
+                  ellipsis
+                />
+              );
+            })}
           </React.Fragment>
         );
       })}

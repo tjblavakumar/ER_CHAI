@@ -148,6 +148,16 @@ const CanvasEditor: React.FC = () => {
     return map;
   }, [chartState]);
 
+  // Build series colors map from series config (column -> color)
+  const seriesColors = React.useMemo(() => {
+    if (!chartState) return {};
+    const map: Record<string, string> = {};
+    for (const s of chartState.series) {
+      map[s.column] = s.color;
+    }
+    return map;
+  }, [chartState]);
+
   // Filter datasetRows by x-axis date range (x_min/x_max) when they are date strings
   const filteredRows = React.useMemo(() => {
     if (!datasetRows || datasetRows.length === 0 || !chartState) return datasetRows;
@@ -291,6 +301,7 @@ const CanvasEditor: React.FC = () => {
               config={{ ...chartState.data_table, position: dataTablePos }}
               datasetRows={filteredRows}
               seriesLabels={seriesLabels}
+              seriesColors={seriesColors}
               onDragEnd={handleDragEnd}
               onContextMenu={handleContextMenu}
             />

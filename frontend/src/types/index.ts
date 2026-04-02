@@ -77,12 +77,20 @@ export interface AnnotationConfig {
   line_width: number;
 }
 
+export interface ComputedColumnDefinition {
+  label: string;
+  formula: string;
+  operands: number[];
+}
+
 export interface DataTableConfig {
   visible: boolean;
   position: Position;
   columns: string[];
   font_size: number;
   max_rows: number;
+  computed_columns?: ComputedColumnDefinition[];
+  computed_values?: Record<string, number | null>;
 }
 
 export interface ChartState {

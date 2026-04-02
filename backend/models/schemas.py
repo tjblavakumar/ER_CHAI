@@ -83,10 +83,20 @@ class AnnotationSpec(BaseModel):
     font_color: str = "#333333"
 
 
+class ComputedColumnDefinition(BaseModel):
+    label: str
+    formula: str
+    operands: list[int]
+
+
 class DataTableSpec(BaseModel):
     columns: list[str]
     visible: bool = False
     font_size: int = 10
+    layout: str = "transposed"
+    num_sampled_dates: int | None = None
+    series_shown: list[str] | None = None
+    computed_columns: list[ComputedColumnDefinition] = []
 
 
 class AxisConfig(BaseModel):
@@ -228,6 +238,8 @@ class DataTableConfig(BaseModel):
     columns: list[str]
     font_size: int = 10
     max_rows: int = 5
+    computed_columns: list[ComputedColumnDefinition] = []
+    computed_values: dict[str, float | None] = {}
 
 
 class ChartState(BaseModel):

@@ -1,0 +1,142 @@
+# Implementation Plan
+
+- [x] 1. Write bug condition exploration test
+  - **Property 1: Bug Condition** - Date Column Included in DataTableConfig and Hardcoded Text Color
+  - **CRITICAL**: This test MUST FAIL on unfixed code — failure confirms the bugs exist
+  - **DO NOT attempt to fix the test or the code when it fails**
+  - **NOTE**: This test encodes the expected behavior — it will validate the fix when it passes after implementation
+  - **GOAL**: Surface counterexamples that demonstrate the three bugs exist
+  - **Scoped PBT Approach**: Use property-based testing with generated DataFrames containing date + numeric columns
+  - **Test file**: `tests/property/test_data_table_bug.py`
+  - **Bug 1 — Column filtering in `_build_chart_state_from_df`**:
+    - Generate DataFrames with a date column (string) and 1–4 numeric columns
+    - Call `_build_chart_state_from_df(df=df, dataset_path="data/test.csv", title="Test")`
+    - Assert `data_table.columns` contains ONLY numeric column names (no date column)
+    - On unfixed code: FAILS because `columns=columns` passes all columns including date
+    - Counterexample: `df` with columns `["date", "PCE", "Core PCE"]` → `data_table.columns` is `["date", "PCE", "Core PCE"]` instead of `["PCE", "Core PCE"]`
+  - **Bug 2 — Column filtering in `_apply_image_spec_to_chart_state`**:
+    - Create a ChartState with a DataTableSpec that has empty columns
+    - Call `_apply_image_spec_to_chart_state` with a DataFrame containing date + numeric columns
+    - Assert resulting `data_table.columns` excludes the date column
+    - On unfixed code: FAILS because fallback uses `list(df.columns)` which includes date
+  - **Bug 3 — Vision extraction completeness**:
+    - Mock a vision response dict that includes `data_table` with `layout`, `num_sampled_dates`, and `series_shown` fields
+    - Call `ImageAnalyzer._parse_vision_response(data)` and inspect the resulting `DataTableSpec`
+    - Assert the new fields are present on the parsed result
+    - On unfixed code: FAILS because `DataTableSpec` schema lacks these fields
+  - Run tests on UNFIXED code
+  - **EXPECTED OUTCOME**: Tests FAIL (this is correct — it proves the bugs exist)
+  - Document counterexamples found to understand root cause
+  - Mark task complete when test is written, run, and failure is documented
+  - _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3_
+
+- [x] 2. Write preservation property tests (BEFORE implementing fix)
+  - **Property 2: Preservation** - FRED Ingestion, Non-Data-Table Elements, and Existing Test Suite
+  - **IMPORTANT**: Follow observation-first methodology
+  - **Test file**: `tests/property/test_data_table_preservation.py`
+  - **Preservation 1 — FRED single-series ingestion produces no data table**:
+    - Observe: `_build_default_chart_state(dataset=..., ...)` returns `data_table=None` on unfixed code
+    - Write property test: for all valid FRED datasets, `_build_default_chart_state` returns `data_table is None`
+    - Verify passes on UNFIXED code
+  - **Preservation 2 — Non-data-table elements unchanged through `_apply_image_spec_to_chart_state`**:
+    - Observe: calling `_apply_image_spec_to_chart_state` preserves annotations, legend entries, gridlines, title text, axes labels
+    - Write property test: for all valid ChartState + ChartSpecification pairs, annotations count is >= original, legend entry count matches, gridline config is preserved
+    - Verify passes on UNFIXED code
+  - **Preservation 3 — All-numeric DataFrame (no date column) produces same columns**:
+    - Observe: `_build_chart_state_from_df` with all-numeric columns returns `data_table.columns` equal to all columns
+    - Write property test: for DataFrames with only numeric columns, `data_table.columns` equals `list(df.columns)`
+    - Verify passes on UNFIXED code
+  - **Preservation 4 — DataTableConfig position from elements_positions honored**:
+    - Observe: `DataTableConfig.position` is set to `Position(x=70, y=490)` by default in `_build_chart_state_from_df`
+    - Write test: verify default position is `(70, 490)` and that `_apply_image_spec_to_chart_state` preserves existing position
+    - Verify passes on UNFIXED code
+  - **Preservation 5 — Vision analysis with no data table returns null**:
+    - Observe: `_parse_vision_response` with `data_table: null` returns `data_table is None`
+    - Write test: verify null data table is preserved
+    - Verify passes on UNFIXED code
+  - Run tests on UNFIXED code
+  - **EXPECTED OUTCOME**: Tests PASS (this confirms baseline behavior to preserve)
+  - Mark task complete when tests are written, run, and passing on unfixed code
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
+
+- [x] 3. Implement the data table fix
+
+  - [x] 3.1 Extend `DataTableSpec` schema in `backend/models/schemas.py`
+    - Add `layout: str = "transposed"` field (values: `"transposed"` or `"standard"`)
+    - Add `num_sampled_dates: int | None = None` field
+    - Add `series_shown: list[str] | None = None` field
+    - _Bug_Condition: isBugCondition(input) where visionSpec IS NOT NULL AND visionSpec.layout IS NULL AND visionSpec.num_sampled_dates IS NULL AND visionSpec.series_shown IS NULL_
+    - _Expected_Behavior: DataTableSpec has layout, num_sampled_dates, series_shown fields populated from vision response_
+    - _Preservation: Existing DataTableSpec usage with only columns/visible/font_size must still work (new fields have defaults)_
+    - _Requirements: 2.3_
+
+  - [x] 3.2 Filter columns in `_build_chart_state_from_df` in `backend/services/ingestion.py`
+    - Change `DataTableConfig(... columns=columns ...)` to `columns=numeric_cols` so only numeric columns are included
+    - The variable `numeric_cols` is already computed earlier in the function
+    - _Bug_Condition: isBugCondition(input) where dateColumnsIncluded is true — columns=columns passes all DataFrame columns including date_
+    - _Expected_Behavior: data_table.columns contains only numeric column names_
+    - _Preservation: All-numeric DataFrames (no date column) produce the same result since numeric_cols == columns_
+    - _Requirements: 2.1_
+
+  - [x] 3.3 Filter columns in `_apply_image_spec_to_chart_state` in `backend/services/ingestion.py`
+    - Replace `list(df.columns)` fallbacks with `[c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]`
+    - Apply this filter in both the `spec.data_table is not None` branch (when `spec.data_table.columns` is empty) and the `data_table is None` fallback branch
+    - When `spec.data_table` has `num_sampled_dates`, propagate it to `DataTableConfig.max_rows`
+    - _Bug_Condition: isBugCondition(input) where dateColumnsIncluded is true via list(df.columns) fallback_
+    - _Expected_Behavior: data_table.columns contains only numeric column names_
+    - _Preservation: Non-data-table elements (annotations, legend, gridlines, title, axes) remain unchanged_
+    - _Requirements: 2.2, 2.3_
+
+  - [x] 3.4 Enhance vision prompt and parsing in `backend/services/image_analyzer.py`
+    - Update the DATA TABLE section of the prompt in `_bedrock_vision_analyze` to ask for `layout` ("transposed" or "standard"), `num_sampled_dates` (integer), and `series_shown` (list of series names)
+    - Update `_parse_vision_response` to parse `layout`, `num_sampled_dates`, and `series_shown` from the vision response dict into the enhanced `DataTableSpec`
+    - _Bug_Condition: isBugCondition(input) where visionIncomplete is true — only columns/visible/font_size extracted_
+    - _Expected_Behavior: DataTableSpec populated with layout, num_sampled_dates, series_shown from vision response_
+    - _Preservation: Vision responses without data_table still return data_table=None_
+    - _Requirements: 2.3_
+
+  - [x] 3.5 Add `seriesColors` prop to `DataTableElement` in `frontend/src/components/chart/DataTableElement.tsx`
+    - Add `seriesColors?: Record<string, string>` to `DataTableElementProps`
+    - Replace hardcoded `fill="#333"` on series name `<Text>` elements with `seriesColors?.[col] ?? "#333"`
+    - Replace hardcoded `fill="#333"` on value cell `<Text>` elements with `seriesColors?.[seriesCols[rowIdx]] ?? "#333"`
+    - Keep header row text ("Series" label and date headers) as `fill="#333"` — only series data rows change
+    - _Bug_Condition: isBugCondition(input) where hardcodedColor is true — fill="#333" used regardless of series color_
+    - _Expected_Behavior: Series row label and value cells use the corresponding series color_
+    - _Preservation: Header row text remains #333; if seriesColors is not provided, falls back to #333_
+    - _Requirements: 2.4_
+
+  - [x] 3.6 Build and pass `seriesColors` map in `frontend/src/components/CanvasEditor.tsx`
+    - Add a `useMemo` that builds `Record<string, string>` mapping `series.column` → `series.color` from `chartState.series`
+    - Pass `seriesColors={seriesColors}` to the `<DataTableElement>` component
+    - _Expected_Behavior: DataTableElement receives series color information for each column_
+    - _Preservation: No changes to any other element rendering (title, legend, annotations, axes, gridlines)_
+    - _Requirements: 2.4_
+
+  - [x] 3.7 Verify bug condition exploration test now passes
+    - **Property 1: Expected Behavior** - Date Column Excluded and Series Colors Applied
+    - **IMPORTANT**: Re-run the SAME test from task 1 — do NOT write a new test
+    - The test from task 1 encodes the expected behavior
+    - When this test passes, it confirms the expected behavior is satisfied
+    - Run bug condition exploration test from step 1: `pytest tests/property/test_data_table_bug.py -v`
+    - **EXPECTED OUTCOME**: Test PASSES (confirms bugs are fixed)
+    - _Requirements: 2.1, 2.2, 2.3_
+
+  - [x] 3.8 Verify preservation tests still pass
+    - **Property 2: Preservation** - FRED Ingestion, Non-Data-Table Elements, and Existing Behavior
+    - **IMPORTANT**: Re-run the SAME tests from task 2 — do NOT write new tests
+    - Run preservation property tests from step 2: `pytest tests/property/test_data_table_preservation.py -v`
+    - **EXPECTED OUTCOME**: Tests PASS (confirms no regressions)
+    - Confirm all tests still pass after fix (no regressions)
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
+
+- [x] 4. Checkpoint — Ensure ALL tests pass (including previous vertical-annotation-fix tests)
+  - Run the FULL test suite to ensure nothing is broken: `pytest tests/ -v`
+  - This MUST include the vertical-annotation-fix property tests:
+    - `tests/property/test_vertical_annotation_bug.py` — vertical line date preservation tests
+    - `tests/property/test_vertical_annotation_preservation.py` — horizontal line, vertical band, text annotation preservation tests
+  - Also includes all unit tests in `tests/unit/`
+  - Also includes the new data-table-fix property tests:
+    - `tests/property/test_data_table_bug.py`
+    - `tests/property/test_data_table_preservation.py`
+  - Ensure all tests pass. Ask the user if questions arise.
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5_
