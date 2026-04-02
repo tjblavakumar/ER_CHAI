@@ -1,6 +1,14 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store/appStore';
-import { exportPython, exportR, exportPdf } from '../api/client';
+import {
+  exportPython,
+  exportR,
+  exportPdf,
+  exportPythonDirect,
+  exportRDirect,
+  exportPdfDirect,
+  exportPdfWithImage,
+} from '../api/client';
 
 type ExportType = 'python' | 'r' | 'pdf';
 
@@ -17,33 +25,55 @@ function triggerDownload(blob: Blob, filename: string) {
 
 const ExportToolbar: React.FC = () => {
   const currentProjectId = useAppStore((s) => s.currentProjectId);
+  const chartState = useAppStore((s) => s.chartState);
+  const summaryText = useAppStore((s) => s.summaryText);
   const [loading, setLoading] = useState<Record<ExportType, boolean>>({
     python: false,
     r: false,
     pdf: false,
   });
 
-  const disabled = !currentProjectId;
+  const disabled = !currentProjectId && !chartState;
 
   const handleExport = async (type: ExportType) => {
-    if (!currentProjectId) return;
+    if (!currentProjectId && !chartState) return;
     setLoading((prev) => ({ ...prev, [type]: true }));
     try {
       let blob: Blob;
       let filename: string;
       switch (type) {
         case 'python':
-          blob = await exportPython(currentProjectId);
+          if (currentProjectId) {
+            blob = await exportPython(currentProjectId);
+          } else {
+            blob = await exportPythonDirect(chartState!);
+          }
           filename = 'chart_python.zip';
           break;
         case 'r':
-          blob = await exportR(currentProjectId);
+          if (currentProjectId) {
+            blob = await exportR(currentProjectId);
+          } else {
+            blob = await exportRDirect(chartState!);
+          }
           filename = 'chart_r.zip';
           break;
-        case 'pdf':
-          blob = await exportPdf(currentProjectId);
+        case 'pdf': {
+          const summaryForPdf = summaryText || 'No summary available.';
+          const canvas = document.querySelector('.konvajs-content canvas') as HTMLCanvasElement;
+          if (canvas) {
+            const dataUrl = canvas.toDataURL('image/png');
+            const response = await fetch(dataUrl);
+            const imageBlob = await response.blob();
+            blob = await exportPdfWithImage(imageBlob, summaryForPdf);
+          } else if (currentProjectId) {
+            blob = await exportPdf(currentProjectId);
+          } else {
+            blob = await exportPdfDirect(chartState!, summaryForPdf);
+          }
           filename = 'chart.pdf';
           break;
+        }
       }
       triggerDownload(blob, filename);
     } catch {
@@ -67,7 +97,7 @@ const ExportToolbar: React.FC = () => {
         onClick={() => handleExport('python')}
         disabled={disabled || loading.python}
         style={buttonStyle(loading.python)}
-        title={disabled ? 'Save the project first to enable export' : 'Export as Python zip'}
+        title={disabled ? 'Load a chart to enable export' : 'Export as Python zip'}
       >
         {loading.python ? 'Exporting…' : 'Python'}
       </button>
@@ -75,7 +105,7 @@ const ExportToolbar: React.FC = () => {
         onClick={() => handleExport('r')}
         disabled={disabled || loading.r}
         style={buttonStyle(loading.r)}
-        title={disabled ? 'Save the project first to enable export' : 'Export as R zip'}
+        title={disabled ? 'Load a chart to enable export' : 'Export as R zip'}
       >
         {loading.r ? 'Exporting…' : 'R'}
       </button>
@@ -83,7 +113,7 @@ const ExportToolbar: React.FC = () => {
         onClick={() => handleExport('pdf')}
         disabled={disabled || loading.pdf}
         style={buttonStyle(loading.pdf)}
-        title={disabled ? 'Save the project first to enable export' : 'Export as PDF'}
+        title={disabled ? 'Load a chart to enable export' : 'Export as PDF'}
       >
         {loading.pdf ? 'Exporting…' : 'PDF'}
       </button>

@@ -61,7 +61,7 @@ function applyDelta(state: ChartState, delta: ChartConfigDelta): ChartState {
     ...(delta.legend != null && { legend: delta.legend }),
     ...(delta.gridlines != null && { gridlines: delta.gridlines }),
     annotations: mergedAnnotations,
-    ...(delta.data_table !== undefined && { data_table: delta.data_table }),
+    ...(delta.data_table != null && { data_table: delta.data_table }),
   };
 }
 

@@ -9,6 +9,7 @@ import type {
 export interface AppState {
   // Project
   currentProjectId: string | null;
+  currentProjectName: string | null;
   projects: ProjectSummary[];
 
   // Chart
@@ -39,6 +40,7 @@ export interface AppState {
   undo: () => void;
   setProjects: (projects: ProjectSummary[]) => void;
   setCurrentProjectId: (id: string | null) => void;
+  setCurrentProjectName: (name: string | null) => void;
   addChatMessage: (message: ChatMessage) => void;
   clearChatMessages: () => void;
   setChatSessionId: (id: string) => void;
@@ -56,6 +58,7 @@ export interface AppState {
 export const useAppStore = create<AppState>((set, get) => ({
   // Project
   currentProjectId: null,
+  currentProjectName: null,
   projects: [],
 
   // Chart
@@ -108,6 +111,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setProjects: (projects) => set({ projects }),
   setCurrentProjectId: (id) => set({ currentProjectId: id }),
+  setCurrentProjectName: (name) => set({ currentProjectName: name }),
 
   addChatMessage: (message) =>
     set((s) => ({ chatMessages: [...s.chatMessages, message] })),
@@ -137,5 +141,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       datasetRows: null,
       selectedElementId: null,
       contextMenuTarget: null,
+      currentProjectName: null,
     }),
 }));

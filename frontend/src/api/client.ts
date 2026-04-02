@@ -3,6 +3,7 @@ import { toast } from 'react-toastify';
 import type {
   AIResponse,
   ChartContext,
+  ChartState,
   ErrorResponse,
   IngestionResult,
   Project,
@@ -117,6 +118,42 @@ export async function exportR(projectId: string): Promise<Blob> {
 
 export async function exportPdf(projectId: string): Promise<Blob> {
   const { data } = await api.get(`/export/pdf/${projectId}`, {
+    responseType: 'blob',
+  });
+  return data as Blob;
+}
+
+// ---------------------------------------------------------------------------
+// Direct Export (no saved project required)
+// ---------------------------------------------------------------------------
+
+export async function exportPythonDirect(chartState: ChartState): Promise<Blob> {
+  const { data } = await api.post('/export/python', { chart_state: chartState }, {
+    responseType: 'blob',
+  });
+  return data as Blob;
+}
+
+export async function exportRDirect(chartState: ChartState): Promise<Blob> {
+  const { data } = await api.post('/export/r', { chart_state: chartState }, {
+    responseType: 'blob',
+  });
+  return data as Blob;
+}
+
+export async function exportPdfDirect(chartState: ChartState, summary: string): Promise<Blob> {
+  const { data } = await api.post('/export/pdf', { chart_state: chartState, summary }, {
+    responseType: 'blob',
+  });
+  return data as Blob;
+}
+
+export async function exportPdfWithImage(imageBlob: Blob, summary: string): Promise<Blob> {
+  const formData = new FormData();
+  formData.append('canvas_image', imageBlob, 'chart.png');
+  formData.append('summary', summary);
+  const { data } = await api.post('/export/pdf', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
     responseType: 'blob',
   });
   return data as Blob;

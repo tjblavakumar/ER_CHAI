@@ -12,8 +12,8 @@ import ContextMenu from './ContextMenu';
 import type { ChartState, Position } from '../types';
 
 // Canvas dimensions
-const STAGE_WIDTH = 860;
-const STAGE_HEIGHT = 560;
+const STAGE_WIDTH = 1200;
+const STAGE_HEIGHT = 700;
 
 // Chart area with margins
 const MARGIN = { top: 50, right: 30, bottom: 60, left: 70 };

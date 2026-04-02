@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useAppStore } from '../store/appStore';
 import {
   listProjects,
@@ -9,11 +9,122 @@ import {
   loadDatasetRows,
 } from '../api/client';
 
+// ---------------------------------------------------------------------------
+// SaveDialog — inline modal for naming a project before save
+// ---------------------------------------------------------------------------
+
+interface SaveDialogProps {
+  defaultName: string;
+  onConfirm: (name: string) => void;
+  onCancel: () => void;
+}
+
+const SaveDialog: React.FC<SaveDialogProps> = ({ defaultName, onConfirm, onCancel }) => {
+  const [name, setName] = useState(defaultName);
+  const [error, setError] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  const handleConfirm = () => {
+    if (!name.trim()) {
+      setError('A project name is required.');
+      return;
+    }
+    onConfirm(name.trim());
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleConfirm();
+    if (e.key === 'Escape') onCancel();
+  };
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.35)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+      }}
+      onClick={onCancel}
+    >
+      <div
+        style={{
+          background: '#fff',
+          borderRadius: 8,
+          padding: 20,
+          minWidth: 320,
+          boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>Save Project</div>
+        <input
+          ref={inputRef}
+          type="text"
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            if (error) setError('');
+          }}
+          onKeyDown={handleKeyDown}
+          style={{
+            width: '100%',
+            padding: '6px 8px',
+            fontSize: 13,
+            border: error ? '1px solid #c00' : '1px solid #ccc',
+            borderRadius: 4,
+            boxSizing: 'border-box',
+          }}
+        />
+        {error && (
+          <div style={{ color: '#c00', fontSize: 12, marginTop: 4 }}>{error}</div>
+        )}
+        <div style={{ display: 'flex', gap: 8, marginTop: 14, justifyContent: 'flex-end' }}>
+          <button
+            onClick={onCancel}
+            style={{ fontSize: 13, padding: '5px 14px', cursor: 'pointer' }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            style={{
+              fontSize: 13,
+              padding: '5px 14px',
+              cursor: 'pointer',
+              background: '#1a73e8',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 4,
+            }}
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// ProjectList
+// ---------------------------------------------------------------------------
+
 const ProjectList: React.FC = () => {
   const projects = useAppStore((s) => s.projects);
   const setProjects = useAppStore((s) => s.setProjects);
   const currentProjectId = useAppStore((s) => s.currentProjectId);
   const setCurrentProjectId = useAppStore((s) => s.setCurrentProjectId);
+  const currentProjectName = useAppStore((s) => s.currentProjectName);
+  const setCurrentProjectName = useAppStore((s) => s.setCurrentProjectName);
   const chartState = useAppStore((s) => s.chartState);
   const setChartState = useAppStore((s) => s.setChartState);
   const setSummaryText = useAppStore((s) => s.setSummaryText);
@@ -23,6 +134,7 @@ const ProjectList: React.FC = () => {
   const resetForNewChart = useAppStore((s) => s.resetForNewChart);
 
   const [saving, setSaving] = useState(false);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
 
   const refreshProjects = async () => {
     try {
@@ -44,6 +156,7 @@ const ProjectList: React.FC = () => {
       setChartState(project.chart_state);
       setSummaryText(project.summary_text);
       setCurrentProjectId(project.id);
+      setCurrentProjectName(project.name);
       setDatasetInfo(null);
       // Reload dataset rows from the saved CSV
       try {
@@ -62,6 +175,7 @@ const ProjectList: React.FC = () => {
       await deleteProject(id);
       if (currentProjectId === id) {
         setCurrentProjectId(null);
+        setCurrentProjectName(null);
       }
       await refreshProjects();
     } catch {
@@ -69,17 +183,23 @@ const ProjectList: React.FC = () => {
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!chartState) return;
+    setShowSaveDialog(true);
+  };
+
+  const handleSaveConfirm = async (name: string) => {
+    if (!chartState) return;
+    setShowSaveDialog(false);
     setSaving(true);
     try {
       if (currentProjectId) {
         await updateProject(currentProjectId, {
+          name,
           chart_state: chartState,
           summary_text: summaryText,
         });
       } else {
-        const name = `Chart ${new Date().toLocaleString()}`;
         const project = await createProject({
           name,
           chart_state: chartState,
@@ -88,12 +208,17 @@ const ProjectList: React.FC = () => {
         });
         setCurrentProjectId(project.id);
       }
+      setCurrentProjectName(name);
       await refreshProjects();
     } catch {
       // Error toast handled by API interceptor
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSaveCancel = () => {
+    setShowSaveDialog(false);
   };
 
   const handleNewChart = () => {
@@ -109,8 +234,18 @@ const ProjectList: React.FC = () => {
     }
   };
 
+  const defaultSaveName = currentProjectName ?? `Chart ${new Date().toLocaleString()}`;
+
   return (
     <div>
+      {showSaveDialog && (
+        <SaveDialog
+          defaultName={defaultSaveName}
+          onConfirm={handleSaveConfirm}
+          onCancel={handleSaveCancel}
+        />
+      )}
+
       <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
         <button
           onClick={handleSave}

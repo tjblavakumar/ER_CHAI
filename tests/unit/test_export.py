@@ -16,6 +16,8 @@ from backend.models.schemas import (
     AxesConfig,
     ChartElementState,
     ChartState,
+    ComputedColumnDefinition,
+    DataTableConfig,
     GridlineConfig,
     LegendConfig,
     LegendEntry,
@@ -190,6 +192,7 @@ class TestExportPython:
         with zipfile.ZipFile(io.BytesIO(result)) as zf:
             names = zf.namelist()
             assert "chart.py" in names
+            assert "data.csv" in names
             assert "requirements.txt" in names
 
     @pytest.mark.asyncio
@@ -209,9 +212,13 @@ class TestExportPython:
 
         with zipfile.ZipFile(io.BytesIO(result)) as zf:
             script = zf.read("chart.py").decode()
-            assert "data = {" in script
-            assert "2020-01-01" in script
-            assert "pd.DataFrame" in script
+            assert 'pd.read_csv("data.csv")' in script
+            assert "data = {" not in script
+
+            # Verify data.csv contains the dataset
+            csv_content = zf.read("data.csv").decode()
+            assert "2020-01-01" in csv_content
+            assert "date" in csv_content
 
     @pytest.mark.asyncio
     async def test_script_valid_python(self, chart_state: ChartState) -> None:
@@ -258,6 +265,7 @@ class TestExportR:
         with zipfile.ZipFile(io.BytesIO(result)) as zf:
             names = zf.namelist()
             assert "chart.R" in names
+            assert "data.csv" in names
             assert "install_packages.R" in names
 
     @pytest.mark.asyncio
@@ -267,8 +275,13 @@ class TestExportR:
 
         with zipfile.ZipFile(io.BytesIO(result)) as zf:
             script = zf.read("chart.R").decode()
-            assert "data <- data.frame(" in script
-            assert "2020-01-01" in script
+            assert 'read.csv("data.csv")' in script
+            assert "data <- data.frame(" not in script
+
+            # Verify data.csv contains the dataset
+            csv_content = zf.read("data.csv").decode()
+            assert "2020-01-01" in csv_content
+            assert "date" in csv_content
 
     @pytest.mark.asyncio
     async def test_r_script_uses_ggplot2(self, chart_state: ChartState) -> None:
@@ -449,3 +462,179 @@ class TestEdgeCases:
             assert "#FF0000" in script
             # Hidden series should not appear in plot commands
             assert 'color="#00FF00"' not in script
+
+
+# ---------------------------------------------------------------------------
+# Full canvas rendering tests (tasks 5.1–5.5)
+# ---------------------------------------------------------------------------
+
+
+class TestFullCanvasRendering:
+    """Tests for title positioning, vertical lines, text annotations,
+    floating legend, and data table rendering in _render_chart_image."""
+
+    def _make_state(self, sample_csv: Path, **overrides) -> ChartState:
+        defaults = dict(
+            chart_type="line",
+            title=ChartElementState(
+                text="Positioned Title",
+                font_family="Arial",
+                font_size=16,
+                font_color="#003A70",
+                position=Position(x=200, y=20),
+            ),
+            axes=AxesConfig(x_label="Date", y_label="Value"),
+            series=[
+                SeriesConfig(
+                    name="Series A",
+                    column="value",
+                    chart_type="line",
+                    color="#0072CE",
+                    line_width=2.0,
+                    visible=True,
+                ),
+            ],
+            legend=LegendConfig(
+                visible=True,
+                position=Position(x=300, y=10),
+                entries=[
+                    LegendEntry(label="Series A", color="#0072CE", series_name="Series A"),
+                ],
+            ),
+            gridlines=GridlineConfig(),
+            annotations=[],
+            data_table=None,
+            elements_positions={},
+            dataset_path=str(sample_csv),
+            dataset_columns=["date", "value"],
+        )
+        defaults.update(overrides)
+        return ChartState(**defaults)
+
+    def test_title_positioning_renders_png(self, sample_csv: Path, sample_df: pd.DataFrame) -> None:
+        """5.1: Title at canvas position renders without error."""
+        state = self._make_state(sample_csv)
+        result = _render_chart_image(state, sample_df)
+        assert result[:8] == b"\x89PNG\r\n\x1a\n"
+
+    def test_vertical_line_annotation(self, sample_csv: Path, sample_df: pd.DataFrame) -> None:
+        """5.2: Vertical line annotation renders without error."""
+        state = self._make_state(
+            sample_csv,
+            annotations=[
+                AnnotationConfig(
+                    id="vl1",
+                    type="vertical_line",
+                    line_value="2020-02-01",
+                    line_color="#cc0000",
+                    line_style="dashed",
+                    line_width=1.5,
+                    position=Position(x=0, y=0),
+                ),
+            ],
+        )
+        result = _render_chart_image(state, sample_df)
+        assert result[:8] == b"\x89PNG\r\n\x1a\n"
+
+    def test_text_annotation(self, sample_csv: Path, sample_df: pd.DataFrame) -> None:
+        """5.3: Text annotation renders without error."""
+        state = self._make_state(
+            sample_csv,
+            annotations=[
+                AnnotationConfig(
+                    id="txt1",
+                    type="text",
+                    text="Important note",
+                    font_size=12,
+                    font_color="#333333",
+                    position=Position(x=400, y=200),
+                ),
+            ],
+        )
+        result = _render_chart_image(state, sample_df)
+        assert result[:8] == b"\x89PNG\r\n\x1a\n"
+
+    def test_floating_legend(self, sample_csv: Path, sample_df: pd.DataFrame) -> None:
+        """5.4: Floating legend entries render without error."""
+        state = self._make_state(
+            sample_csv,
+            elements_positions={
+                "legend_entry_Series A": Position(x=600, y=100),
+            },
+        )
+        result = _render_chart_image(state, sample_df)
+        assert result[:8] == b"\x89PNG\r\n\x1a\n"
+
+    def test_data_table_rendering(self, sample_csv: Path, sample_df: pd.DataFrame) -> None:
+        """5.5: Data table renders without error."""
+        state = self._make_state(
+            sample_csv,
+            data_table=DataTableConfig(
+                visible=True,
+                position=Position(x=0, y=400),
+                columns=["date", "value"],
+                font_size=10,
+                max_rows=3,
+            ),
+        )
+        result = _render_chart_image(state, sample_df)
+        assert result[:8] == b"\x89PNG\r\n\x1a\n"
+
+    def test_data_table_with_computed_columns(self, sample_csv: Path, sample_df: pd.DataFrame) -> None:
+        """5.5: Data table with computed columns renders without error."""
+        state = self._make_state(
+            sample_csv,
+            data_table=DataTableConfig(
+                visible=True,
+                position=Position(x=0, y=400),
+                columns=["date", "value"],
+                font_size=10,
+                max_rows=3,
+                computed_columns=[
+                    ComputedColumnDefinition(label="Avg", formula="average", operands=[0]),
+                ],
+                computed_values={"value:Avg": 2.3},
+            ),
+        )
+        result = _render_chart_image(state, sample_df)
+        assert result[:8] == b"\x89PNG\r\n\x1a\n"
+
+    def test_all_elements_combined(self, sample_csv: Path, sample_df: pd.DataFrame) -> None:
+        """All new elements combined render without error."""
+        state = self._make_state(
+            sample_csv,
+            annotations=[
+                AnnotationConfig(
+                    id="vl1", type="vertical_line", line_value="2020-02-01",
+                    line_color="#cc0000", line_style="dashed", line_width=1.5,
+                    position=Position(x=0, y=0),
+                ),
+                AnnotationConfig(
+                    id="txt1", type="text", text="Note here",
+                    font_size=10, font_color="#333333",
+                    position=Position(x=300, y=150),
+                ),
+                AnnotationConfig(
+                    id="hl1", type="horizontal_line", line_value=2.0,
+                    line_color="#00cc00", line_style="dotted", line_width=1.0,
+                    position=Position(x=0, y=0),
+                ),
+            ],
+            elements_positions={
+                "legend_entry_Series A": Position(x=600, y=100),
+            },
+            data_table=DataTableConfig(
+                visible=True,
+                position=Position(x=0, y=400),
+                columns=["date", "value"],
+                font_size=10,
+                max_rows=3,
+                computed_columns=[
+                    ComputedColumnDefinition(label="Avg", formula="average", operands=[0]),
+                ],
+                computed_values={"value:Avg": 2.3},
+            ),
+        )
+        result = _render_chart_image(state, sample_df)
+        assert result[:8] == b"\x89PNG\r\n\x1a\n"
+        assert len(result) > 5000

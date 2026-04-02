@@ -251,6 +251,66 @@ async def export_pdf(project_id: str):
 
 
 # ---------------------------------------------------------------------------
+# Direct export endpoints (no saved project required)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/export/python")
+async def export_python_direct(payload: dict):
+    """Export chart as a Python matplotlib zip archive from chart_state directly."""
+    chart_state = ChartState(**payload["chart_state"])
+    data = await _export_service.export_python(chart_state)
+    return Response(
+        content=data,
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="chart_python.zip"'},
+    )
+
+
+@router.post("/export/r")
+async def export_r_direct(payload: dict):
+    """Export chart as an R ggplot2 zip archive from chart_state directly."""
+    chart_state = ChartState(**payload["chart_state"])
+    data = await _export_service.export_r(chart_state)
+    return Response(
+        content=data,
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="chart_r.zip"'},
+    )
+
+
+@router.post("/export/pdf")
+async def export_pdf_direct(
+    request: Request,
+    canvas_image: UploadFile | None = File(None),
+    summary: str | None = Form(None),
+):
+    """Export chart as a PDF document.
+
+    Accepts either:
+    - Multipart form data with ``canvas_image`` (PNG) and ``summary`` text
+    - JSON body with ``chart_state`` and ``summary``
+    """
+    content_type = request.headers.get("content-type", "")
+
+    if "multipart/form-data" in content_type and canvas_image is not None:
+        image_bytes = await canvas_image.read()
+        summary_text = summary or "No summary available."
+        data = await _export_service.export_pdf_from_image(image_bytes, summary_text)
+    else:
+        payload = await request.json()
+        chart_state = ChartState(**payload["chart_state"])
+        summary_text = payload.get("summary", "No summary available.")
+        data = await _export_service.export_pdf(chart_state, summary_text)
+
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="chart.pdf"'},
+    )
+
+
+# ---------------------------------------------------------------------------
 # Project CRUD
 # ---------------------------------------------------------------------------
 
