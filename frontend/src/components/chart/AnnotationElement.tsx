@@ -148,7 +148,7 @@ const AnnotationElement: React.FC<AnnotationElementProps> = ({
         />
         {label && (
           <Text
-            x={px + 4}
+            x={px + 8}
             y={chartArea.y + 2}
             text={label}
             fontSize={config.font_size}

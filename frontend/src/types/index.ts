@@ -71,7 +71,7 @@ export interface AnnotationConfig {
   band_start: string | null;
   band_end: string | null;
   band_color: string | null;
-  line_value: number | null;  // y-value for horizontal_line
+  line_value: number | string | null;  // y-value for horizontal_line, date string for vertical_line
   line_color: string;         // color for horizontal_line
   line_style: string;         // "solid" | "dashed" | "dotted"
   line_width: number;

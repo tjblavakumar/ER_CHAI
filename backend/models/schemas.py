@@ -216,7 +216,7 @@ class AnnotationConfig(BaseModel):
     band_start: str | None = None  # date for vertical bands
     band_end: str | None = None
     band_color: str | None = None
-    line_value: float | None = None  # y-value for horizontal_line
+    line_value: float | str | None = None  # y-value for horizontal_line, or date string for vertical_line
     line_color: str = "#cc0000"  # color for horizontal_line
     line_style: str = "dotted"  # "solid" | "dashed" | "dotted"
     line_width: float = 1.5
