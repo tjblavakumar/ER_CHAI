@@ -64,13 +64,14 @@ const DataTableElement: React.FC<DataTableElementProps> = ({
     }) ?? null;
   }
 
-  // Sample evenly spaced date indices
+  // Sample the last N date indices (most recent months)
   const totalRows = hasData ? datasetRows.length : 0;
   const sampledIndices: number[] = [];
   if (totalRows > 0 && maxDateCols > 0) {
     const count = Math.min(maxDateCols, totalRows);
+    const startIdx = totalRows - count;
     for (let i = 0; i < count; i++) {
-      sampledIndices.push(Math.round((i * (totalRows - 1)) / Math.max(count - 1, 1)));
+      sampledIndices.push(startIdx + i);
     }
   }
 

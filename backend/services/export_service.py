@@ -261,7 +261,7 @@ def _generate_python_script(chart_state: ChartState, df: pd.DataFrame) -> str:
         dt_lines.append("        if len(df) <= _n_samples:")
         dt_lines.append("            _sampled_idx = list(range(len(df)))")
         dt_lines.append("        else:")
-        dt_lines.append("            _sampled_idx = [int(round(i * (len(df) - 1) / (_n_samples - 1))) for i in range(_n_samples)]")
+        dt_lines.append("            _sampled_idx = list(range(len(df) - _n_samples, len(df)))")
 
         # Build date labels — use first column as date
         first_col = str(df.columns[0])
@@ -822,10 +822,9 @@ def _render_chart_image(chart_state: ChartState, df: pd.DataFrame) -> bytes:
                 if n_rows <= n_samples:
                     sampled_indices = list(range(n_rows))
                 else:
-                    sampled_indices = [
-                        int(round(i * (n_rows - 1) / (n_samples - 1)))
-                        for i in range(n_samples)
-                    ]
+                    # Use the last N rows (most recent dates)
+                    start_idx = n_rows - n_samples
+                    sampled_indices = list(range(start_idx, n_rows))
 
                 # Build date labels for sampled columns
                 date_labels = []

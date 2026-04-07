@@ -726,10 +726,9 @@ def _apply_image_spec_to_chart_state(
             if count <= 0:
                 sampled_indices: list[int] = []
             else:
-                sampled_indices = [
-                    round((i * (total_rows - 1)) / max(count - 1, 1))
-                    for i in range(count)
-                ]
+                # Use the last N rows (most recent dates)
+                start_idx = total_rows - count
+                sampled_indices = list(range(start_idx, total_rows))
 
             computed_values: dict[str, float | None] = {}
             for series_col in numeric_only_cols:
