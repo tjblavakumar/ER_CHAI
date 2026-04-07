@@ -28,6 +28,9 @@ export interface AppState {
   // Summary
   summaryText: string;
 
+  // Reference image
+  referenceImageFile: File | null;
+
   // UI
   selectedElementId: string | null;
   contextMenuTarget: { elementId: string; x: number; y: number } | null;
@@ -52,6 +55,7 @@ export interface AppState {
   setLoadingMessage: (msg: string) => void;
   setDatasetInfo: (info: DatasetInfo | null) => void;
   setDatasetRows: (rows: Record<string, unknown>[] | null) => void;
+  setReferenceImageFile: (file: File | null) => void;
   resetForNewChart: () => void;
 }
 
@@ -76,6 +80,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Summary
   summaryText: '',
+
+  // Reference image
+  referenceImageFile: null,
 
   // UI
   selectedElementId: null,
@@ -128,6 +135,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setDatasetInfo: (info) => set({ datasetInfo: info }),
   setDatasetRows: (rows) => set({ datasetRows: rows }),
+  setReferenceImageFile: (file) => set({ referenceImageFile: file }),
 
   resetForNewChart: () =>
     set({
@@ -142,5 +150,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedElementId: null,
       contextMenuTarget: null,
       currentProjectName: null,
+      referenceImageFile: null,
     }),
 }));

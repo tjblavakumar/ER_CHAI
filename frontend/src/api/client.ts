@@ -63,6 +63,23 @@ export async function ingestFromFile(
 }
 
 // ---------------------------------------------------------------------------
+// Reanalyze
+// ---------------------------------------------------------------------------
+
+export async function reanalyzeChart(
+  referenceImage: File,
+  datasetPath: string,
+): Promise<{ chart_state: ChartState; dataset_rows: Record<string, unknown>[] }> {
+  const formData = new FormData();
+  formData.append('reference_image', referenceImage);
+  formData.append('dataset_path', datasetPath);
+  const { data } = await api.post('/reanalyze', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+}
+
+// ---------------------------------------------------------------------------
 // AI Assistant
 // ---------------------------------------------------------------------------
 

@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import math
+
 import pandas as pd
 from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
@@ -20,6 +22,17 @@ from backend.models.schemas import (
 )
 
 router = APIRouter(prefix="/api")
+
+
+def _sanitize_nan(obj):
+    """Recursively replace float NaN/Inf with None for JSON compliance."""
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
+    if isinstance(obj, dict):
+        return {k: _sanitize_nan(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_nan(v) for v in obj]
+    return obj
 
 # ---------------------------------------------------------------------------
 # Service references — populated by ``init_routes`` at startup
@@ -113,7 +126,7 @@ async def ingest_from_url(payload: dict):
     """
     url = payload.get("url", "")
     result = await _ingestion_service.ingest_from_url(url)
-    return result.model_dump()
+    return _sanitize_nan(result.model_dump())
 
 
 @router.post("/ingest/upload")
@@ -123,7 +136,7 @@ async def ingest_from_upload(
 ):
     """Accept a multipart file upload with optional reference image."""
     result = await _ingestion_service.ingest_from_file(file, reference_image)
-    return result.model_dump()
+    return _sanitize_nan(result.model_dump())
 
 
 # ---------------------------------------------------------------------------
@@ -356,6 +369,42 @@ async def delete_project(project_id: str):
     """Delete a project."""
     await _project_store.delete(project_id)
     return {"status": "deleted", "id": project_id}
+
+
+@router.post("/reanalyze")
+async def reanalyze(
+    reference_image: UploadFile = File(...),
+    dataset_path: str = Form(...),
+):
+    """Re-analyze reference image and regenerate chart from existing dataset."""
+    import os
+    from backend.services.ingestion import (
+        _detect_and_pivot_long_format,
+        _build_chart_state_from_df,
+        _apply_image_spec_to_chart_state,
+    )
+
+    if not dataset_path or not os.path.exists(dataset_path):
+        return JSONResponse(
+            status_code=404,
+            content=ErrorResponse(
+                error="DATASET_NOT_FOUND",
+                message=f"Dataset file not found: {dataset_path}",
+            ).model_dump(),
+        )
+
+    df = pd.read_csv(dataset_path)
+    df = _detect_and_pivot_long_format(df)
+
+    title = os.path.splitext(os.path.basename(dataset_path))[0]
+    chart_state = _build_chart_state_from_df(df=df, dataset_path=dataset_path, title=title)
+
+    image_bytes = await reference_image.read()
+    spec, vision_result = await _ingestion_service._image_analyzer.analyze(image_bytes)
+    chart_state = _apply_image_spec_to_chart_state(chart_state, spec, df, vision_result)
+
+    dataset_rows = df.where(df.notna(), None).to_dict(orient="records")
+    return _sanitize_nan({"chart_state": chart_state.model_dump(), "dataset_rows": dataset_rows})
 
 
 @router.post("/dataset/rows")

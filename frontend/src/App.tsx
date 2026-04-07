@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useAppStore } from './store/appStore';
-import { ingestFromUrl, ingestFromFile, generateSummary } from './api/client';
+import { ingestFromUrl, ingestFromFile, generateSummary, reanalyzeChart } from './api/client';
 import type { ChartContext } from './types';
 
 import ProjectList from './components/ProjectList';
@@ -64,32 +64,14 @@ const DataIngestionBar: React.FC = () => {
   const setChartState = useAppStore((s) => s.setChartState);
   const setDatasetInfo = useAppStore((s) => s.setDatasetInfo);
   const setDatasetRows = useAppStore((s) => s.setDatasetRows);
-  const setSummaryText = useAppStore((s) => s.setSummaryText);
   const setIsLoading = useAppStore((s) => s.setIsLoading);
   const setLoadingMessage = useAppStore((s) => s.setLoadingMessage);
+  const setReferenceImageFile = useAppStore((s) => s.setReferenceImageFile);
   const isLoading = useAppStore((s) => s.isLoading);
 
   const [fredUrl, setFredUrl] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-
-  // Auto-generate summary after ingestion
-  const autoGenerateSummary = useCallback(
-    async (datasetPath: string, chartState: Parameters<typeof setChartState>[0]) => {
-      try {
-        const context: ChartContext = {
-          chart_state: chartState,
-          dataset_summary: '',
-          dataset_sample: [],
-        };
-        const summary = await generateSummary(datasetPath, context);
-        setSummaryText(summary);
-      } catch {
-        // Summary generation failure is non-blocking
-      }
-    },
-    [setSummaryText],
-  );
 
   // FRED URL ingestion flow
   const handleFredIngest = useCallback(async () => {
@@ -104,21 +86,25 @@ const DataIngestionBar: React.FC = () => {
       setDatasetInfo(result.dataset_info);
       setDatasetRows(result.dataset_rows ?? null);
       setFredUrl('');
-      setLoadingMessage('Generating executive summary...');
-      await autoGenerateSummary(result.dataset_path, result.chart_state);
     } catch {
       // Error toast handled by API interceptor
     } finally {
       setIsLoading(false);
       setLoadingMessage('');
     }
-  }, [fredUrl, setChartState, setDatasetInfo, setIsLoading, setLoadingMessage, autoGenerateSummary]);
+  }, [fredUrl, setChartState, setDatasetInfo, setIsLoading, setLoadingMessage, setDatasetRows]);
 
   // File upload ingestion flow
   const handleFileUpload = useCallback(async () => {
     const file = fileInputRef.current?.files?.[0];
     if (!file) return;
     const refImage = imageInputRef.current?.files?.[0];
+    // Store reference image in app store before ingestion
+    if (refImage) {
+      setReferenceImageFile(refImage);
+    } else {
+      setReferenceImageFile(null);
+    }
     setIsLoading(true);
     try {
       setLoadingMessage(refImage
@@ -131,15 +117,13 @@ const DataIngestionBar: React.FC = () => {
       setDatasetRows(result.dataset_rows ?? null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (imageInputRef.current) imageInputRef.current.value = '';
-      setLoadingMessage('Generating executive summary...');
-      await autoGenerateSummary(result.dataset_path, result.chart_state);
     } catch {
       // Error toast handled by API interceptor
     } finally {
       setIsLoading(false);
       setLoadingMessage('');
     }
-  }, [setChartState, setDatasetInfo, setIsLoading, setLoadingMessage, autoGenerateSummary]);
+  }, [setChartState, setDatasetInfo, setIsLoading, setLoadingMessage, setReferenceImageFile, setDatasetRows]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleFredIngest();
@@ -283,6 +267,50 @@ const BedrockStatus: React.FC = () => {
 const App: React.FC = () => {
   const isLoading = useAppStore((s) => s.isLoading);
   const loadingMessage = useAppStore((s) => s.loadingMessage);
+  const chartState = useAppStore((s) => s.chartState);
+  const referenceImageFile = useAppStore((s) => s.referenceImageFile);
+  const setChartState = useAppStore((s) => s.setChartState);
+  const setDatasetRows = useAppStore((s) => s.setDatasetRows);
+  const setIsLoading = useAppStore((s) => s.setIsLoading);
+  const setLoadingMessage = useAppStore((s) => s.setLoadingMessage);
+  const setSummaryText = useAppStore((s) => s.setSummaryText);
+
+  const handleReanalyze = useCallback(async () => {
+    if (!chartState || !referenceImageFile) return;
+    setIsLoading(true);
+    try {
+      setLoadingMessage('Re-analyzing reference image...');
+      const result = await reanalyzeChart(referenceImageFile, chartState.dataset_path);
+      setLoadingMessage('Rendering chart...');
+      setChartState(result.chart_state);
+      setDatasetRows(result.dataset_rows ?? null);
+    } catch {
+      // Error toast handled by API interceptor
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage('');
+    }
+  }, [chartState, referenceImageFile, setChartState, setDatasetRows, setIsLoading, setLoadingMessage]);
+
+  const handleGenerateSummary = useCallback(async () => {
+    if (!chartState) return;
+    setIsLoading(true);
+    try {
+      setLoadingMessage('Generating executive summary...');
+      const context: ChartContext = {
+        chart_state: chartState,
+        dataset_summary: '',
+        dataset_sample: [],
+      };
+      const summary = await generateSummary(chartState.dataset_path, context);
+      setSummaryText(summary);
+    } catch {
+      // Error toast handled by API interceptor
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage('');
+    }
+  }, [chartState, setIsLoading, setLoadingMessage, setSummaryText]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'Arial, sans-serif', position: 'relative' }}>
@@ -366,6 +394,32 @@ const App: React.FC = () => {
           >
             <h1 style={{ fontSize: 18, margin: 0 }}>FRBSF Chart Builder</h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  onClick={handleReanalyze}
+                  disabled={!chartState || !referenceImageFile || isLoading}
+                  style={{
+                    padding: '4px 12px',
+                    fontSize: 12,
+                    cursor: !chartState || !referenceImageFile || isLoading ? 'not-allowed' : 'pointer',
+                    opacity: !chartState || !referenceImageFile || isLoading ? 0.6 : 1,
+                  }}
+                >
+                  Reanalyze &amp; Regenerate
+                </button>
+                <button
+                  onClick={handleGenerateSummary}
+                  disabled={!chartState || isLoading}
+                  style={{
+                    padding: '4px 12px',
+                    fontSize: 12,
+                    cursor: !chartState || isLoading ? 'not-allowed' : 'pointer',
+                    opacity: !chartState || isLoading ? 0.6 : 1,
+                  }}
+                >
+                  Exe Summary
+                </button>
+              </div>
               <BedrockStatus />
               <ExportToolbar />
             </div>
