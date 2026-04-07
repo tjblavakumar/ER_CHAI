@@ -129,7 +129,6 @@ const DataSeriesElement: React.FC<DataSeriesElementProps> = ({
                 fill={s.color}
                 opacity={0.3}
                 closed
-                tension={0.3}
               />
               <Line
                 points={points}
@@ -137,7 +136,6 @@ const DataSeriesElement: React.FC<DataSeriesElementProps> = ({
                 strokeWidth={s.line_width}
                 lineCap="round"
                 lineJoin="round"
-                tension={0.3}
               />
             </React.Fragment>
           );
@@ -151,7 +149,6 @@ const DataSeriesElement: React.FC<DataSeriesElementProps> = ({
             strokeWidth={s.line_width}
             lineCap="round"
             lineJoin="round"
-            tension={0.3}
           />
         );
       })}
