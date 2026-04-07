@@ -414,6 +414,7 @@ async def get_dataset_rows(payload: dict):
     Expects JSON body: ``{"dataset_path": "data/file.csv"}``
     """
     import os
+    from backend.services.ingestion import _detect_and_pivot_long_format
     dataset_path = payload.get("dataset_path", "")
     if not dataset_path or not os.path.exists(dataset_path):
         return JSONResponse(
@@ -424,5 +425,6 @@ async def get_dataset_rows(payload: dict):
             ).model_dump(),
         )
     df = pd.read_csv(dataset_path)
+    df = _detect_and_pivot_long_format(df)
     rows = df.where(df.notna(), None).to_dict(orient="records")
     return {"rows": rows}

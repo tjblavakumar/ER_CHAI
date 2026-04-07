@@ -47,11 +47,17 @@ _FRBSF_FONT = "Helvetica"
 
 
 def _load_dataset(dataset_path: str) -> pd.DataFrame:
-    """Load a dataset from the given path (CSV or Excel)."""
+    """Load a dataset from the given path (CSV or Excel).
+
+    Applies long-format detection and pivoting to ensure wide format.
+    """
+    from backend.services.ingestion import _detect_and_pivot_long_format
     path = Path(dataset_path)
     if path.suffix in (".xlsx", ".xls"):
-        return pd.read_excel(path)
-    return pd.read_csv(path)
+        df = pd.read_excel(path)
+    else:
+        df = pd.read_csv(path)
+    return _detect_and_pivot_long_format(df)
 
 
 def _df_to_python_literal(df: pd.DataFrame) -> str:
