@@ -8,11 +8,14 @@ specifications.
 from __future__ import annotations
 
 import io
+import logging
 import os
 import re
 from pathlib import Path
 
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 from backend.models.schemas import (
     AnnotationConfig,
@@ -402,7 +405,7 @@ def _detect_and_pivot_long_format(df: pd.DataFrame) -> pd.DataFrame:
             value_col = col
             continue
 
-        if key_col is None and pd.api.types.is_object_dtype(df[col]):
+        if key_col is None and (pd.api.types.is_object_dtype(df[col]) or pd.api.types.is_string_dtype(df[col])):
             nunique = df[col].nunique()
             # Key column should have few unique values relative to row count
             if 1 < nunique <= len(df) * 0.5:
@@ -520,8 +523,8 @@ def _build_chart_state_from_df(
         y_label=numeric_cols[0] if len(numeric_cols) == 1 else "Value",
         x_scale="linear",
         y_scale="linear",
-        y_min=float(df[numeric_cols].min().min()) if numeric_cols else None,
-        y_max=float(df[numeric_cols].max().max()) if numeric_cols else None,
+        y_min=float(df[numeric_cols].min(skipna=True).min()) if numeric_cols and not pd.isna(df[numeric_cols].min().min()) else None,
+        y_max=float(df[numeric_cols].max(skipna=True).max()) if numeric_cols and not pd.isna(df[numeric_cols].max().max()) else None,
     )
 
     legend = LegendConfig(
@@ -750,6 +753,9 @@ def _apply_image_spec_to_chart_state(
                             operand_values.append(None)
 
                     result = _compute_derived_value(cc.formula, operand_values)
+                    # Sanitize NaN to None for JSON compliance
+                    if result is not None and pd.isna(result):
+                        result = None
                     computed_values[f"{series_col}:{cc.label}"] = result
 
             data_table.computed_values = computed_values
