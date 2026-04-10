@@ -5,6 +5,7 @@ import type {
   DatasetInfo,
   ProjectSummary,
 } from '../types';
+import { generateUUID } from '../utils/uuid';
 
 export interface AppState {
   // Project
@@ -76,7 +77,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // AI Chat
   chatMessages: [],
-  chatSessionId: crypto.randomUUID(),
+  chatSessionId: generateUUID(),
 
   // Summary
   summaryText: '',
@@ -143,7 +144,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       chartHistory: [],
       historyIndex: -1,
       chatMessages: [],
-      chatSessionId: crypto.randomUUID(),
+      chatSessionId: generateUUID(),
       summaryText: '',
       datasetInfo: null,
       datasetRows: null,
