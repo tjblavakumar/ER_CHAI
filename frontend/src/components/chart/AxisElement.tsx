@@ -61,8 +61,8 @@ const AxisElement: React.FC<AxisElementProps> = ({
   }
 
   // X-axis numeric ticks (fallback when no xLabels)
-  const xMin = config.x_min ?? 0;
-  const xMax = config.x_max ?? 100;
+  const xMin = Number(config.x_min ?? 0);
+  const xMax = Number(config.x_max ?? 100);
   const xTicks: number[] = [];
   for (let i = 0; i <= TICK_COUNT; i++) {
     xTicks.push(xMin + ((xMax - xMin) * i) / TICK_COUNT);

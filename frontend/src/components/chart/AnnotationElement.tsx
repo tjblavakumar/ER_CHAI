@@ -88,9 +88,11 @@ const AnnotationElement: React.FC<AnnotationElementProps> = ({
 
   // Horizontal line at a specific Y value
   if (config.type === 'horizontal_line') {
-    const lineVal = config.line_value ?? 0;
-    const yRange = yMax - yMin || 1;
-    const py = chartArea.y + chartArea.height - ((lineVal - yMin) / yRange) * chartArea.height;
+    const lineVal = Number(config.line_value ?? 0);
+    const yMinVal = yMin ?? 0;
+    const yMaxVal = yMax ?? 100;
+    const yRange = yMaxVal - yMinVal || 1;
+    const py = chartArea.y + chartArea.height - ((lineVal - yMinVal) / yRange) * chartArea.height;
     const dash = dashForStyle(config.line_style ?? 'dotted');
     const label = config.text ?? `${lineVal}`;
 
