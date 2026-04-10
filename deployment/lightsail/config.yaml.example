@@ -1,0 +1,23 @@
+# ER_CHAI Configuration File
+# Copy this to config.yaml and update with your credentials
+
+# AWS Bedrock Configuration
+aws_region: us-east-1
+bedrock_model_id: us.anthropic.claude-sonnet-4-5-20250929-v1:0
+bedrock_vision_model_id: us.anthropic.claude-sonnet-4-5-20250929-v1:0
+
+# AWS Credentials (Optional - use IAM role instead for better security)
+# If running on Lightsail with IAM role attached, leave these commented out
+# aws_access_key_id: YOUR_ACCESS_KEY_HERE
+# aws_secret_access_key: YOUR_SECRET_KEY_HERE
+# aws_session_token: null  # Optional
+
+# FRED API Key (for economic data)
+fred_api_key: YOUR_FRED_API_KEY_HERE
+
+# Database
+database_path: data/projects.db
+
+# File Upload
+upload_dir: uploaded_datasets
+max_upload_size_mb: 100

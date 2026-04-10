@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ../..
+      dockerfile: deployment/lightsail/docker/backend.Dockerfile
+    container_name: er_chai_backend
+    ports:
+      - "8080:8080"
+    environment:
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - DATABASE_PATH=/app/data/projects.db
+    volumes:
+      - app_data:/app/data
+      - uploaded_datasets:/app/uploaded_datasets
+      - ./config.yaml:/app/config.yaml:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ../..
+      dockerfile: deployment/lightsail/docker/frontend.Dockerfile
+    container_name: er_chai_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  app_data:
+    driver: local
+  uploaded_datasets:
+    driver: local
