@@ -86,13 +86,14 @@ class AIAssistantHandler:
                 chart_delta=delta,
             )
         elif intent == "summary_update":
-            summary_text = await self._handle_summary_update(session_id, message, chart_context)
+            summary_text, replace_flag = await self._handle_summary_update(session_id, message, chart_context)
             self._sessions[session_id].append({"role": "user", "content": message})
             self._sessions[session_id].append({"role": "assistant", "content": summary_text})
             return AIResponse(
                 type="summary_update",
                 message=summary_text,
                 chart_delta=None,
+                replace_summary=replace_flag,
             )
         else:
             answer = await self._handle_data_qa(session_id, message, chart_context)
@@ -254,8 +255,14 @@ class AIAssistantHandler:
         session_id: str,
         message: str,
         chart_context: ChartContext,
-    ) -> str:
-        """Generate text to append to the executive summary."""
+    ) -> tuple[str, bool]:
+        """Generate summary text and determine if it should replace or append.
+        
+        Returns:
+            tuple[str, bool]: (summary_text, replace_flag)
+                - summary_text: The generated summary content
+                - replace_flag: True to replace entire summary, False to append
+        """
         history = self._sessions.get(session_id, [])
         history_text = ""
         if history:
@@ -266,17 +273,42 @@ class AIAssistantHandler:
 
         prompt = (
             "You are an AI assistant for an FRBSF chart editing application.\n"
-            "The user wants to update the executive summary. Based on the "
-            "conversation history, generate the text that should be appended "
-            "to the executive summary.\n\n"
+            "The user wants to update the executive summary.\n\n"
+            "First, analyze the user's intent:\n"
+            "- REPLACE: User wants to create a NEW summary from scratch "
+            "(e.g., 'generate new summary', 'create 100-word summary', 'rewrite the summary')\n"
+            "- APPEND: User wants to ADD to existing summary "
+            "(e.g., 'add a section about', 'append conclusion', 'include risks section')\n\n"
             f"{history_text}"
             f"User request: {message}\n\n"
-            "Generate ONLY the text to append to the summary. "
+            "Respond in JSON format:\n"
+            "{\n"
+            '  "replace": true or false,\n'
+            '  "text": "the summary content here in markdown format"\n'
+            "}\n\n"
             "Write in a professional, concise style suitable for an executive audience. "
-            "Do not include any JSON or chart modifications."
+            "Use markdown formatting (headings, lists, bold) as appropriate."
         )
 
-        return await self._invoke_bedrock(prompt)
+        response_text = await self._invoke_bedrock(prompt)
+        
+        # Parse the JSON response
+        try:
+            # Strip markdown fences if present
+            text = response_text.strip()
+            if text.startswith("```"):
+                lines = text.split("\n")
+                lines = [l for l in lines if not l.strip().startswith("```")]
+                text = "\n".join(lines)
+            
+            data = json.loads(text)
+            summary_text = data.get("text", response_text)
+            replace_flag = data.get("replace", False)
+            return summary_text, replace_flag
+        except (json.JSONDecodeError, KeyError):
+            # Fallback: if parsing fails, treat as append and use raw response
+            logger.warning("Failed to parse summary update response as JSON, using raw text")
+            return response_text, False
 
     # -- Bedrock invocation with retry --------------------------------------
 

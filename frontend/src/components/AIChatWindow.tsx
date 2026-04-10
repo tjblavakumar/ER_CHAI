@@ -225,16 +225,19 @@ const AIChatWindow: React.FC = () => {
           timestamp: new Date().toISOString(),
         });
       } else if (response.type === 'summary_update') {
-        // Append to executive summary
+        // Replace or append based on AI's intent detection
         const currentSummary = useAppStore.getState().summaryText;
-        const newSummary = currentSummary
-          ? `${currentSummary}\n\n${response.message}`
-          : response.message;
+        const shouldReplace = response.replace_summary ?? false;
+        
+        const newSummary = shouldReplace || !currentSummary
+          ? response.message
+          : `${currentSummary}\n\n${response.message}`;
+        
         useAppStore.getState().setSummaryText(newSummary);
 
         addChatMessage({
           role: 'assistant',
-          content: 'Updated the executive summary.',
+          content: shouldReplace ? 'Replaced the executive summary.' : 'Updated the executive summary.',
           timestamp: new Date().toISOString(),
         });
       } else {

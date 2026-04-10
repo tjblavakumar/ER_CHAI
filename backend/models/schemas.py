@@ -279,9 +279,10 @@ class ChartConfigDelta(BaseModel):
 
 
 class AIResponse(BaseModel):
-    type: str  # "chart_modify" | "data_qa"
+    type: str  # "chart_modify" | "data_qa" | "summary_update"
     message: str  # text response to user
     chart_delta: ChartConfigDelta | None = None  # only for chart_modify
+    replace_summary: bool = False  # for summary_update: True=replace, False=append
 
 
 # --- Project ---

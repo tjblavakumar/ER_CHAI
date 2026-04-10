@@ -127,9 +127,10 @@ export interface ChartContext {
 }
 
 export interface AIResponse {
-  type: string; // "chart_modify" | "data_qa"
+  type: string; // "chart_modify" | "data_qa" | "summary_update"
   message: string;
   chart_delta: ChartConfigDelta | null;
+  replace_summary?: boolean; // for summary_update: true=replace, false=append
 }
 
 // --- Project ---

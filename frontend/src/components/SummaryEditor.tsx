@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { useAppStore } from '../store/appStore';
 import { generateSummary } from '../api/client';
 import type { ChartContext } from '../types';
@@ -8,6 +9,7 @@ const SummaryEditor: React.FC = () => {
   const setSummaryText = useAppStore((s) => s.setSummaryText);
   const chartState = useAppStore((s) => s.chartState);
   const [generating, setGenerating] = useState(false);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
 
   const handleGenerate = async () => {
     if (!chartState) return;
@@ -42,25 +44,69 @@ const SummaryEditor: React.FC = () => {
         >
           {generating ? 'Generating…' : 'Generate Summary'}
         </button>
+        <button
+          onClick={() => setIsPreviewMode(!isPreviewMode)}
+          disabled={!summaryText}
+          style={{
+            fontSize: 12,
+            padding: '2px 8px',
+            cursor: !summaryText ? 'not-allowed' : 'pointer',
+            marginLeft: 'auto',
+          }}
+        >
+          {isPreviewMode ? 'Edit' : 'Preview'}
+        </button>
       </div>
-      <textarea
-        value={summaryText}
-        onChange={(e) => setSummaryText(e.target.value)}
-        placeholder="Summary will appear here after chart generation."
-        style={{
-          width: '100%',
-          minHeight: 200,
-          maxHeight: 400,
-          resize: 'vertical',
-          overflowY: 'auto',
-          fontFamily: 'inherit',
-          fontSize: 13,
-          padding: 8,
-          border: '1px solid #ccc',
-          borderRadius: 4,
-          boxSizing: 'border-box',
-        }}
-      />
+      {isPreviewMode ? (
+        <div
+          style={{
+            width: '100%',
+            minHeight: 200,
+            maxHeight: 400,
+            overflowY: 'auto',
+            padding: 12,
+            border: '1px solid #ccc',
+            borderRadius: 4,
+            boxSizing: 'border-box',
+            backgroundColor: '#fafafa',
+          }}
+        >
+          <ReactMarkdown
+            components={{
+              h1: ({ node, ...props }) => <h1 style={{ fontSize: 20, marginTop: 16, marginBottom: 8 }} {...props} />,
+              h2: ({ node, ...props }) => <h2 style={{ fontSize: 18, marginTop: 14, marginBottom: 6 }} {...props} />,
+              h3: ({ node, ...props }) => <h3 style={{ fontSize: 16, marginTop: 12, marginBottom: 4 }} {...props} />,
+              p: ({ node, ...props }) => <p style={{ marginBottom: 8, lineHeight: 1.6 }} {...props} />,
+              ul: ({ node, ...props }) => <ul style={{ marginLeft: 20, marginBottom: 8 }} {...props} />,
+              ol: ({ node, ...props }) => <ol style={{ marginLeft: 20, marginBottom: 8 }} {...props} />,
+              li: ({ node, ...props }) => <li style={{ marginBottom: 4 }} {...props} />,
+              strong: ({ node, ...props }) => <strong style={{ fontWeight: 600 }} {...props} />,
+              code: ({ node, ...props }) => <code style={{ backgroundColor: '#e8e8e8', padding: '2px 4px', borderRadius: 3, fontSize: 12 }} {...props} />,
+            }}
+          >
+            {summaryText || 'No summary available.'}
+          </ReactMarkdown>
+        </div>
+      ) : (
+        <textarea
+          value={summaryText}
+          onChange={(e) => setSummaryText(e.target.value)}
+          placeholder="Summary will appear here after chart generation."
+          style={{
+            width: '100%',
+            minHeight: 200,
+            maxHeight: 400,
+            resize: 'vertical',
+            overflowY: 'auto',
+            fontFamily: 'inherit',
+            fontSize: 13,
+            padding: 8,
+            border: '1px solid #ccc',
+            borderRadius: 4,
+            boxSizing: 'border-box',
+          }}
+        />
+      )}
     </div>
   );
 };
