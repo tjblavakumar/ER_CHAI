@@ -1,13 +1,14 @@
-# FRBSF Chart Builder
+# CHAI : Chart AI Assistant
 
-A local web application for creating, customizing, and exporting FRBSF-branded economic charts. Built with FastAPI (Python) backend and React + Konva.js frontend, powered by AWS Bedrock (Claude Sonnet 4.5) for AI-driven chart editing, image analysis, and executive summary generation.
+An AI-powered web application for creating, customizing, and exporting publication-quality economic charts. Built with FastAPI (Python) backend and React + Konva.js frontend, powered by AWS Bedrock (Claude Sonnet 4.5) for AI-driven chart editing, Vision AI image analysis, and executive summary generation.
 
 ## Features
 
 ### 1. Data Ingestion
-- **FRED API**: Paste a FRED URL to automatically download economic data and generate a chart
+- **FRED API**: Paste a FRED URL to automatically download economic data and generate a chart, with optional reference image to mimic styling via Vision AI
 - **File Upload**: Upload CSV or Excel files with optional reference chart image
 - **Reference Image Analysis**: OpenCV + AWS Bedrock Vision (20-field comprehensive prompt) extracts colors, chart type, annotations, horizontal lines, vertical bands, axis formatting, gridlines, title, and layout from reference images
+- **Visual Distinction**: FRED URL input (blue) and CSV/Excel upload (green) are color-coded for easy identification
 - **Long-format detection**: Automatically pivots long-format data (date, key, value) to wide format
 - **Date range filtering**: X-axis supports date-based min/max filtering
 
@@ -17,21 +18,23 @@ A local web application for creating, customizing, and exporting FRBSF-branded e
 - **Right-click Context Menu**: Change font size, color, family; rename legend labels; delete annotations
 - **Chart Types**: Line, bar, area, and mixed charts
 - **Manual Controls**: Axis properties (labels, ranges, scales, line width, tick/label font sizes, Y-axis format), series colors/styles, gridlines, legend, data table
+- **Resizable Panels**: VS Code-style draggable dividers between all sections (left sidebar, canvas, controls, summary) with minimum size constraints — no section collapses entirely
 
 ### 3. Annotations
 - **Horizontal Lines**: Dotted/dashed/solid reference lines at specific Y values (e.g., inflation target)
 - **Vertical Lines**: Lines at specific dates (e.g., financial crisis, COVID)
-- **Vertical Bands**: Shaded regions between date ranges (e.g., recession periods)
+- **Vertical Bands**: Shaded regions between date ranges (e.g., recession periods) with optional labels
 - **Text Annotations**: Floating text labels anywhere on the chart
+- **Full Label Customization**: All annotation types (horizontal lines, vertical lines, vertical bands) support editable label text, font size, and font color — configurable via Controls Panel or AI assistant
 - **Add/Delete**: Manual buttons (+ H-Line, + V-Line, + Text, + V-Band) and ✕ delete per annotation
-- **AI-driven**: Create and remove annotations via natural language
-- **Right-click Delete**: Right-click any annotation on the canvas to delete it
+- **AI-driven**: Create, customize, and remove annotations via natural language
+- **Right-click Context Menu**: Right-click any annotation on the canvas for quick actions
 
 ### 4. AI Assistant (Claude Sonnet 4.5)
-- **Natural Language Commands**: "Change to area chart", "Add % to y-axis", "Create vertical band between 2020-01 and 2020-06", "Create vertical red lines for financial crises"
+- **Natural Language Commands**: "Change to area chart", "Add % to y-axis", "Create vertical band between 2020-01 and 2020-06", "Make the annotation label bigger and red"
 - **Data Q&A**: Ask questions about your data — trends, peaks, comparisons
 - **Summary Updates**: "Append this information to the executive summary"
-- **Annotation Management**: Add and remove annotations by name
+- **Annotation Management**: Add, customize, and remove annotations by name — including label font size and color
 - **Floating Chat Window**: Bottom-right icon opens the AI chat with undo support
 - **Per-chart Context**: Conversation resets when you create a new chart
 - **Bedrock Status**: Green/red indicator in the header shows connection status
@@ -51,17 +54,19 @@ A local web application for creating, customizing, and exporting FRBSF-branded e
 
 ### 7. Data Table
 - **Transposed Layout**: Rows = data series, Columns = sampled dates
+- **Drag-to-Resize**: Resize handles appear on hover — right edge (column widths), bottom edge (row heights), corner (both) — all proportional scaling
 - **Numeric-only Columns**: Automatically excludes date columns from data table rows
 - **Series-colored Text**: Row labels and values use the corresponding data series color
 - **Computed Columns**: Vision analysis detects derived columns from reference images (e.g., "chg" for month-over-month change) and computes them from actual data
 - **Dynamic Structure**: Data table structure is driven by the reference image — nothing hardcoded
-- **Customizable**: Select which columns to show, max date columns, font size
+- **Customizable**: Select which columns to show, max date columns, font size, column width, row height
 - **Legend-synced**: Row labels use legend entry names
 - **Draggable**: Float the data table anywhere on the canvas
 
 ### 8. Executive Summary
 - **Auto-generated**: Trend analysis, peaks/troughs, predictions, economist perspective
-- **Editable**: Large text area (10+ rows) with vertical scrollbar
+- **Resizable Panel**: Drag the divider to expand the summary section — no more tiny text boxes
+- **Editable**: Full-height text area that fills the panel with vertical scrollbar
 - **AI Append**: Ask the AI to add analysis to the summary
 - **Powered by Bedrock**: Uses Claude Sonnet 4.5
 

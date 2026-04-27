@@ -33,7 +33,7 @@ export interface AxesConfig {
 export interface SeriesConfig {
   name: string;
   column: string;
-  chart_type: string; // "line" | "bar"
+  chart_type: string; // "line" | "bar" | "area"
   color: string;
   line_width: number;
   visible: boolean;
@@ -89,12 +89,15 @@ export interface DataTableConfig {
   columns: string[];
   font_size: number;
   max_rows: number;
+  col_width?: number;       // width per date/computed column (default 70)
+  row_height?: number;      // height per data row (default 22)
+  series_col_width?: number; // width of the series name column (default 120)
   computed_columns?: ComputedColumnDefinition[];
   computed_values?: Record<string, number | null>;
 }
 
 export interface ChartState {
-  chart_type: string; // "line" | "bar" | "mixed"
+  chart_type: string; // "line" | "bar" | "area" | "mixed"
   title: ChartElementState;
   axes: AxesConfig;
   series: SeriesConfig[];

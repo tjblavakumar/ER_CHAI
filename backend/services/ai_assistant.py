@@ -188,12 +188,19 @@ class AIAssistantHandler:
             "CHART TYPES: Valid chart_type values are: line, bar, area, mixed.\n"
             "For area charts, set chart_type to 'area' (fills under the line).\n\n"
             "ANNOTATIONS: Supported annotation types:\n"
-            '- "text": text label at a position\n'
-            '- "vertical_band": shaded vertical band (needs band_start, band_end, band_color)\n'
-            '- "horizontal_line": dotted line across chart at a Y value. '
-            "Use line_value for the Y value, line_color, line_style (dotted/dashed/solid), line_width.\n"
+            '- "text": text label at a position. Fields: text, font_size, font_color, position.\n'
+            '- "vertical_band": shaded vertical band. Fields: band_start, band_end, band_color, '
+            "text (optional label), font_size, font_color.\n"
+            '- "horizontal_line": reference line across chart at a Y value. '
+            "Fields: line_value (Y value), text (label), font_size (label size), "
+            "font_color (label color), line_color, line_style (dotted/dashed/solid), line_width.\n"
+            '- "vertical_line": vertical line at a date/year. '
+            "Fields: line_value (date or year), text (label), font_size (label size), "
+            "font_color (label color), line_color, line_style, line_width.\n"
+            "All annotation types support font_size and font_color for their label text.\n"
             'Example: {"annotations": [{"type": "horizontal_line", "line_value": 2.0, '
-            '"text": "Target 2%", "line_color": "#cc0000", "line_style": "dotted"}]}\n'
+            '"text": "Target 2%", "font_size": 12, "font_color": "#cc0000", '
+            '"line_color": "#cc0000", "line_style": "dotted"}]}\n'
             "IMPORTANT: When adding annotations, include ONLY the NEW annotation(s) "
             "in the annotations array. Do NOT include existing annotations — they will "
             "be preserved automatically. Each annotation needs a unique id.\n"

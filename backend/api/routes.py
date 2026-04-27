@@ -119,13 +119,16 @@ async def bedrock_status(request: Request):
 
 
 @router.post("/ingest/url")
-async def ingest_from_url(payload: dict):
-    """Accept a FRED URL and return chart config.
+async def ingest_from_url(
+    url: str = Form(...),
+    reference_image: UploadFile | None = File(None),
+):
+    """Accept a FRED URL with optional reference image and return chart config.
 
-    Expects JSON body: ``{"url": "https://fred.stlouisfed.org/series/GDP"}``
+    Accepts multipart form data with ``url`` (required) and
+    ``reference_image`` (optional PNG/JPEG).
     """
-    url = payload.get("url", "")
-    result = await _ingestion_service.ingest_from_url(url)
+    result = await _ingestion_service.ingest_from_url(url, reference_image)
     return _sanitize_nan(result.model_dump())
 
 

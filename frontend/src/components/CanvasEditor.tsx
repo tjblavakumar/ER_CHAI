@@ -125,6 +125,26 @@ const CanvasEditor: React.FC = () => {
     [chartState, setChartState, setContextMenuTarget],
   );
 
+  /**
+   * Handle data table resize from drag handles.
+   */
+  const handleDataTableResize = useCallback(
+    (colWidth: number, rowHeight: number, seriesColWidth: number) => {
+      if (!chartState || !chartState.data_table) return;
+      const updated: ChartState = {
+        ...chartState,
+        data_table: {
+          ...chartState.data_table,
+          col_width: Math.round(colWidth * 10) / 10,
+          row_height: Math.round(rowHeight * 10) / 10,
+          series_col_width: Math.round(seriesColWidth * 10) / 10,
+        },
+      };
+      setChartState(updated);
+    },
+    [chartState, setChartState],
+  );
+
   // Extract date labels from datasetRows (first non-numeric column)
   // Must be before any early return to satisfy Rules of Hooks
   const xLabels = React.useMemo(() => {
@@ -304,6 +324,7 @@ const CanvasEditor: React.FC = () => {
               seriesColors={seriesColors}
               onDragEnd={handleDragEnd}
               onContextMenu={handleContextMenu}
+              onResize={handleDataTableResize}
             />
           )}
         </Layer>

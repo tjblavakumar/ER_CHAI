@@ -42,8 +42,15 @@ api.interceptors.response.use(
 // Ingestion
 // ---------------------------------------------------------------------------
 
-export async function ingestFromUrl(url: string): Promise<IngestionResult> {
-  const { data } = await api.post<IngestionResult>('/ingest/url', { url });
+export async function ingestFromUrl(url: string, referenceImage?: File): Promise<IngestionResult> {
+  const formData = new FormData();
+  formData.append('url', url);
+  if (referenceImage) {
+    formData.append('reference_image', referenceImage);
+  }
+  const { data } = await api.post<IngestionResult>('/ingest/url', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
   return data;
 }
 

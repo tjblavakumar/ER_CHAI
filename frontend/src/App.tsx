@@ -11,6 +11,185 @@ import ExportToolbar from './components/ExportToolbar';
 import AIChatWindow from './components/AIChatWindow';
 
 // ---------------------------------------------------------------------------
+// Resizable divider hook
+// ---------------------------------------------------------------------------
+
+function useResizable(
+  direction: 'horizontal' | 'vertical',
+  initial: number,
+  min: number,
+  max: number,
+) {
+  const [size, setSize] = useState(initial);
+  const dragging = useRef(false);
+  const startPos = useRef(0);
+  const startSize = useRef(0);
+
+  const onMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      dragging.current = true;
+      startPos.current = direction === 'horizontal' ? e.clientX : e.clientY;
+      startSize.current = size;
+
+      const onMouseMove = (ev: MouseEvent) => {
+        if (!dragging.current) return;
+        const delta =
+          direction === 'horizontal'
+            ? ev.clientX - startPos.current
+            : ev.clientY - startPos.current;
+        const newSize = Math.min(max, Math.max(min, startSize.current + delta));
+        setSize(newSize);
+      };
+
+      const onMouseUp = () => {
+        dragging.current = false;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = direction === 'horizontal' ? 'col-resize' : 'row-resize';
+      document.body.style.userSelect = 'none';
+    },
+    [direction, size, min, max],
+  );
+
+  return { size, onMouseDown };
+}
+
+// Divider for right sidebar (drag changes width, but we drag from the left edge)
+function useResizableRight(
+  initial: number,
+  min: number,
+  max: number,
+) {
+  const [size, setSize] = useState(initial);
+  const dragging = useRef(false);
+  const startPos = useRef(0);
+  const startSize = useRef(0);
+
+  const onMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      dragging.current = true;
+      startPos.current = e.clientX;
+      startSize.current = size;
+
+      const onMouseMove = (ev: MouseEvent) => {
+        if (!dragging.current) return;
+        // Dragging left increases width, dragging right decreases
+        const delta = startPos.current - ev.clientX;
+        const newSize = Math.min(max, Math.max(min, startSize.current + delta));
+        setSize(newSize);
+      };
+
+      const onMouseUp = () => {
+        dragging.current = false;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    },
+    [size, min, max],
+  );
+
+  return { size, onMouseDown };
+}
+
+// Divider for bottom section (drag changes height, dragging up increases)
+function useResizableBottom(
+  initial: number,
+  min: number,
+  max: number,
+) {
+  const [size, setSize] = useState(initial);
+  const dragging = useRef(false);
+  const startPos = useRef(0);
+  const startSize = useRef(0);
+
+  const onMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      dragging.current = true;
+      startPos.current = e.clientY;
+      startSize.current = size;
+
+      const onMouseMove = (ev: MouseEvent) => {
+        if (!dragging.current) return;
+        const delta = startPos.current - ev.clientY;
+        const newSize = Math.min(max, Math.max(min, startSize.current + delta));
+        setSize(newSize);
+      };
+
+      const onMouseUp = () => {
+        dragging.current = false;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = 'row-resize';
+      document.body.style.userSelect = 'none';
+    },
+    [size, min, max],
+  );
+
+  return { size, onMouseDown };
+}
+
+// ---------------------------------------------------------------------------
+// Divider component
+// ---------------------------------------------------------------------------
+
+const dividerBaseStyle: React.CSSProperties = {
+  flexShrink: 0,
+  background: '#e0e0e0',
+  transition: 'background 0.15s',
+  zIndex: 10,
+};
+
+const DividerH: React.FC<{ onMouseDown: (e: React.MouseEvent) => void }> = ({ onMouseDown }) => (
+  <div
+    onMouseDown={onMouseDown}
+    style={{
+      ...dividerBaseStyle,
+      width: 5,
+      cursor: 'col-resize',
+      alignSelf: 'stretch',
+    }}
+    onMouseEnter={(e) => (e.currentTarget.style.background = '#1a73e8')}
+    onMouseLeave={(e) => (e.currentTarget.style.background = '#e0e0e0')}
+  />
+);
+
+const DividerV: React.FC<{ onMouseDown: (e: React.MouseEvent) => void }> = ({ onMouseDown }) => (
+  <div
+    onMouseDown={onMouseDown}
+    style={{
+      ...dividerBaseStyle,
+      height: 5,
+      cursor: 'row-resize',
+      width: '100%',
+    }}
+    onMouseEnter={(e) => (e.currentTarget.style.background = '#1a73e8')}
+    onMouseLeave={(e) => (e.currentTarget.style.background = '#e0e0e0')}
+  />
+);
+
+// ---------------------------------------------------------------------------
 // Network error banner — polls /api/health to detect connectivity (Req 2.5)
 // ---------------------------------------------------------------------------
 
@@ -72,27 +251,39 @@ const DataIngestionBar: React.FC = () => {
   const [fredUrl, setFredUrl] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const fredImageInputRef = useRef<HTMLInputElement>(null);
 
-  // FRED URL ingestion flow
+  // FRED URL ingestion flow (with optional reference image)
   const handleFredIngest = useCallback(async () => {
     const url = fredUrl.trim();
     if (!url) return;
+    const refImage = fredImageInputRef.current?.files?.[0];
+    if (refImage) {
+      setReferenceImageFile(refImage);
+    } else {
+      setReferenceImageFile(null);
+    }
     setIsLoading(true);
     try {
-      setLoadingMessage('Downloading data from FRED...');
-      const result = await ingestFromUrl(url);
+      setLoadingMessage(
+        refImage
+          ? 'Downloading data from FRED & analyzing reference image...'
+          : 'Downloading data from FRED...',
+      );
+      const result = await ingestFromUrl(url, refImage);
       setLoadingMessage('Rendering chart...');
       setChartState(result.chart_state);
       setDatasetInfo(result.dataset_info);
       setDatasetRows(result.dataset_rows ?? null);
       setFredUrl('');
+      if (fredImageInputRef.current) fredImageInputRef.current.value = '';
     } catch {
       // Error toast handled by API interceptor
     } finally {
       setIsLoading(false);
       setLoadingMessage('');
     }
-  }, [fredUrl, setChartState, setDatasetInfo, setIsLoading, setLoadingMessage, setDatasetRows]);
+  }, [fredUrl, setChartState, setDatasetInfo, setIsLoading, setLoadingMessage, setDatasetRows, setReferenceImageFile]);
 
   // File upload ingestion flow
   const handleFileUpload = useCallback(async () => {
@@ -133,8 +324,8 @@ const DataIngestionBar: React.FC = () => {
     <div
       style={{
         display: 'flex',
-        alignItems: 'center',
-        gap: 12,
+        alignItems: 'stretch',
+        gap: 10,
         padding: '8px 16px',
         borderBottom: '1px solid #e0e0e0',
         background: '#f5f7fa',
@@ -142,9 +333,20 @@ const DataIngestionBar: React.FC = () => {
         fontSize: 13,
       }}
     >
-      {/* FRED URL input */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <label htmlFor="fred-url" style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+      {/* ---- FRED URL section (blue tint) ---- */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '8px 12px',
+          background: '#e8f0fe',
+          border: '1px solid #c5d7f2',
+          borderRadius: 6,
+          flexWrap: 'wrap',
+        }}
+      >
+        <label htmlFor="fred-url" style={{ fontWeight: 600, whiteSpace: 'nowrap', color: '#1a56db' }}>
           FRED URL:
         </label>
         <input
@@ -156,32 +358,60 @@ const DataIngestionBar: React.FC = () => {
           placeholder="https://fred.stlouisfed.org/series/..."
           disabled={isLoading}
           style={{
-            width: 280,
+            width: 250,
             padding: '4px 8px',
-            border: '1px solid #ccc',
+            border: '1px solid #a4c2f4',
             borderRadius: 4,
             fontSize: 12,
+            background: '#fff',
           }}
         />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <label htmlFor="fred-ref-image" style={{ fontWeight: 500, whiteSpace: 'nowrap', fontSize: 11, color: '#5a7dba' }}>
+            Ref image:
+          </label>
+          <input
+            id="fred-ref-image"
+            ref={fredImageInputRef}
+            type="file"
+            accept="image/*"
+            disabled={isLoading}
+            style={{ fontSize: 11, maxWidth: 150 }}
+          />
+        </div>
         <button
           onClick={handleFredIngest}
           disabled={isLoading || !fredUrl.trim()}
           style={{
-            padding: '4px 12px',
+            padding: '4px 14px',
             fontSize: 12,
             cursor: isLoading || !fredUrl.trim() ? 'not-allowed' : 'pointer',
             opacity: isLoading || !fredUrl.trim() ? 0.6 : 1,
+            background: '#1a73e8',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 4,
+            fontWeight: 600,
           }}
         >
           {isLoading ? 'Loading…' : 'Ingest'}
         </button>
       </div>
 
-      <span style={{ color: '#aaa' }}>|</span>
-
-      {/* File upload */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <label htmlFor="data-file" style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+      {/* ---- CSV/Excel upload section (green tint) ---- */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '8px 12px',
+          background: '#e6f4ea',
+          border: '1px solid #b7dfc3',
+          borderRadius: 6,
+          flexWrap: 'wrap',
+        }}
+      >
+        <label htmlFor="data-file" style={{ fontWeight: 600, whiteSpace: 'nowrap', color: '#1e7e34' }}>
           Upload CSV/Excel:
         </label>
         <input
@@ -192,34 +422,37 @@ const DataIngestionBar: React.FC = () => {
           disabled={isLoading}
           style={{ fontSize: 12 }}
         />
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <label htmlFor="ref-image" style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
-          Reference image:
-        </label>
-        <input
-          id="ref-image"
-          ref={imageInputRef}
-          type="file"
-          accept="image/*"
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <label htmlFor="ref-image" style={{ fontWeight: 600, whiteSpace: 'nowrap', fontSize: 11, color: '#3d8b5e' }}>
+            Reference image:
+          </label>
+          <input
+            id="ref-image"
+            ref={imageInputRef}
+            type="file"
+            accept="image/*"
+            disabled={isLoading}
+            style={{ fontSize: 12 }}
+          />
+        </div>
+        <button
+          onClick={handleFileUpload}
           disabled={isLoading}
-          style={{ fontSize: 12 }}
-        />
+          style={{
+            padding: '4px 14px',
+            fontSize: 12,
+            cursor: isLoading ? 'not-allowed' : 'pointer',
+            opacity: isLoading ? 0.6 : 1,
+            background: '#1e8e3e',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 4,
+            fontWeight: 600,
+          }}
+        >
+          {isLoading ? 'Uploading…' : 'Upload & Ingest'}
+        </button>
       </div>
-
-      <button
-        onClick={handleFileUpload}
-        disabled={isLoading}
-        style={{
-          padding: '4px 12px',
-          fontSize: 12,
-          cursor: isLoading ? 'not-allowed' : 'pointer',
-          opacity: isLoading ? 0.6 : 1,
-        }}
-      >
-        {isLoading ? 'Uploading…' : 'Upload & Ingest'}
-      </button>
     </div>
   );
 };
@@ -274,6 +507,11 @@ const App: React.FC = () => {
   const setIsLoading = useAppStore((s) => s.setIsLoading);
   const setLoadingMessage = useAppStore((s) => s.setLoadingMessage);
   const setSummaryText = useAppStore((s) => s.setSummaryText);
+
+  // Resizable panels
+  const leftSidebar = useResizable('horizontal', 220, 150, 400);
+  const rightSidebar = useResizableRight(270, 200, 500);
+  const summaryPanel = useResizableBottom(250, 120, 600);
 
   const handleReanalyze = useCallback(async () => {
     if (!chartState || !referenceImageFile) return;
@@ -366,7 +604,8 @@ const App: React.FC = () => {
         {/* Left sidebar — Project List */}
         <aside
           style={{
-            width: 220,
+            width: leftSidebar.size,
+            minWidth: 150,
             borderRight: '1px solid #ddd',
             padding: 12,
             overflowY: 'auto',
@@ -378,8 +617,11 @@ const App: React.FC = () => {
           <ProjectList />
         </aside>
 
+        {/* Left divider */}
+        <DividerH onMouseDown={leftSidebar.onMouseDown} />
+
         {/* Main content area */}
-        <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
           {/* Header: title + export toolbar */}
           <header
             style={{
@@ -392,7 +634,7 @@ const App: React.FC = () => {
               flexShrink: 0,
             }}
           >
-            <h1 style={{ fontSize: 18, margin: 0 }}>FRBSF Chart Builder</h1>
+            <h1 style={{ fontSize: 18, margin: 0 }}>CHAI : Chart AI Assistant</h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <button
@@ -428,49 +670,63 @@ const App: React.FC = () => {
           {/* Data ingestion bar */}
           <DataIngestionBar />
 
-          {/* Canvas + Controls */}
-          <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-            {/* Center: Canvas Editor */}
+          {/* Canvas + Controls + Summary */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {/* Canvas + Controls row */}
+            <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 200 }}>
+              {/* Center: Canvas Editor */}
+              <section
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: '#f0f0f0',
+                  overflow: 'auto',
+                  minWidth: 400,
+                }}
+              >
+                <CanvasEditor />
+              </section>
+
+              {/* Right divider */}
+              <DividerH onMouseDown={rightSidebar.onMouseDown} />
+
+              {/* Right sidebar: Controls Panel */}
+              <aside
+                style={{
+                  width: rightSidebar.size,
+                  minWidth: 200,
+                  borderLeft: '1px solid #ddd',
+                  padding: 12,
+                  overflowY: 'auto',
+                  background: '#fafafa',
+                  flexShrink: 0,
+                }}
+              >
+                <h2 style={{ fontSize: 15, margin: '0 0 10px' }}>Controls</h2>
+                <ControlsPanel />
+              </aside>
+            </div>
+
+            {/* Bottom divider */}
+            <DividerV onMouseDown={summaryPanel.onMouseDown} />
+
+            {/* Bottom: Summary Editor */}
             <section
               style={{
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: '#f0f0f0',
-                overflow: 'auto',
-              }}
-            >
-              <CanvasEditor />
-            </section>
-
-            {/* Right sidebar: Controls Panel */}
-            <aside
-              style={{
-                width: 270,
-                borderLeft: '1px solid #ddd',
+                height: summaryPanel.size,
+                minHeight: 120,
+                borderTop: '1px solid #ddd',
                 padding: 12,
-                overflowY: 'auto',
-                background: '#fafafa',
+                background: '#fff',
                 flexShrink: 0,
+                overflowY: 'auto',
               }}
             >
-              <h2 style={{ fontSize: 15, margin: '0 0 10px' }}>Controls</h2>
-              <ControlsPanel />
-            </aside>
+              <SummaryEditor />
+            </section>
           </div>
-
-          {/* Bottom: Summary Editor */}
-          <section
-            style={{
-              borderTop: '1px solid #ddd',
-              padding: 12,
-              background: '#fff',
-              flexShrink: 0,
-            }}
-          >
-            <SummaryEditor />
-          </section>
         </main>
       </div>
 
