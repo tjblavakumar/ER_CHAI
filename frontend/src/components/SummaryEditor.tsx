@@ -30,7 +30,7 @@ const SummaryEditor: React.FC = () => {
   };
 
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <h2 style={{ fontSize: 14, margin: 0 }}>Executive Summary</h2>
         <button
@@ -61,8 +61,8 @@ const SummaryEditor: React.FC = () => {
         <div
           style={{
             width: '100%',
-            minHeight: 200,
-            maxHeight: 400,
+            flex: 1,
+            minHeight: 80,
             overflowY: 'auto',
             padding: 12,
             border: '1px solid #ccc',
@@ -94,9 +94,9 @@ const SummaryEditor: React.FC = () => {
           placeholder="Summary will appear here after chart generation."
           style={{
             width: '100%',
-            minHeight: 200,
-            maxHeight: 400,
-            resize: 'vertical',
+            flex: 1,
+            minHeight: 80,
+            resize: 'none',
             overflowY: 'auto',
             fontFamily: 'inherit',
             fontSize: 13,

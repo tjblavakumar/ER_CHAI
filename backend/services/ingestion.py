@@ -81,9 +81,13 @@ class DataIngestionService:
 
     # -- Public API ---------------------------------------------------------
 
-    async def ingest_from_url(self, url: str) -> IngestionResult:
+    async def ingest_from_url(self, url: str, reference_image: object | None = None) -> IngestionResult:
         """Download FRED data from *url*, store locally, and generate a
         default FRBSF-branded chart specification.
+
+        If *reference_image* is provided (a FastAPI ``UploadFile``), the
+        image is analyzed with Vision AI and the detected styling is
+        applied to the chart.
 
         Returns an ``IngestionResult`` containing the dataset path, a
         ready-to-render ``ChartState``, and dataset metadata.
@@ -121,6 +125,12 @@ class DataIngestionService:
             columns=list(df.columns),
             df=df,
         )
+
+        # Apply reference image analysis if provided and analyzer is available
+        if reference_image is not None and self._image_analyzer is not None:
+            image_bytes: bytes = await reference_image.read()
+            spec, vision_result = await self._image_analyzer.analyze(image_bytes)
+            chart_state = _apply_image_spec_to_chart_state(chart_state, spec, df, vision_result)
 
         # Include actual data rows for frontend rendering
         dataset_rows = df.where(df.notna(), None).to_dict(orient="records")

@@ -238,6 +238,9 @@ class DataTableConfig(BaseModel):
     columns: list[str]
     font_size: int = 10
     max_rows: int = 5
+    col_width: float = 70.0  # width per date/computed column
+    row_height: float = 22.0  # height per data row
+    series_col_width: float = 120.0  # width of the series name column
     computed_columns: list[ComputedColumnDefinition] = []
     computed_values: dict[str, float | None] = {}
 

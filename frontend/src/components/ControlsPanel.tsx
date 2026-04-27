@@ -60,7 +60,17 @@ function usePatchChart() {
   return useCallback(
     (partial: Partial<ChartState>) => {
       if (!chartState) return;
-      setChartState({ ...chartState, ...partial });
+      const merged = { ...chartState, ...partial };
+
+      // When global chart_type changes, propagate to all series
+      if (partial.chart_type && partial.chart_type !== chartState.chart_type && !partial.series) {
+        merged.series = chartState.series.map((s) => ({
+          ...s,
+          chart_type: partial.chart_type!,
+        }));
+      }
+
+      setChartState(merged);
     },
     [chartState, setChartState],
   );
@@ -488,6 +498,32 @@ const ControlsPanel: React.FC = () => {
                     onChange={(e) => patchAnnotation(idx, { band_color: e.target.value })}
                   />
                 </Field>
+                <Field label="Label">
+                  <input
+                    type="text"
+                    value={ann.text ?? ''}
+                    onChange={(e) => patchAnnotation(idx, { text: e.target.value })}
+                    placeholder="Optional label"
+                    style={{ width: '100%' }}
+                  />
+                </Field>
+                <Field label="Label Font Size">
+                  <input
+                    type="number"
+                    min={6}
+                    max={36}
+                    value={ann.font_size}
+                    onChange={(e) => patchAnnotation(idx, { font_size: Number(e.target.value) })}
+                    style={{ width: '100%' }}
+                  />
+                </Field>
+                <Field label="Label Color">
+                  <input
+                    type="color"
+                    value={ann.font_color}
+                    onChange={(e) => patchAnnotation(idx, { font_color: e.target.value })}
+                  />
+                </Field>
               </>
             )}
             {ann.type === 'horizontal_line' && (
@@ -507,6 +543,23 @@ const ControlsPanel: React.FC = () => {
                     value={ann.text ?? ''}
                     onChange={(e) => patchAnnotation(idx, { text: e.target.value })}
                     style={{ width: '100%' }}
+                  />
+                </Field>
+                <Field label="Label Font Size">
+                  <input
+                    type="number"
+                    min={6}
+                    max={36}
+                    value={ann.font_size}
+                    onChange={(e) => patchAnnotation(idx, { font_size: Number(e.target.value) })}
+                    style={{ width: '100%' }}
+                  />
+                </Field>
+                <Field label="Label Color">
+                  <input
+                    type="color"
+                    value={ann.font_color}
+                    onChange={(e) => patchAnnotation(idx, { font_color: e.target.value })}
                   />
                 </Field>
                 <Field label="Line Color">
@@ -557,6 +610,23 @@ const ControlsPanel: React.FC = () => {
                     value={ann.text ?? ''}
                     onChange={(e) => patchAnnotation(idx, { text: e.target.value })}
                     style={{ width: '100%' }}
+                  />
+                </Field>
+                <Field label="Label Font Size">
+                  <input
+                    type="number"
+                    min={6}
+                    max={36}
+                    value={ann.font_size}
+                    onChange={(e) => patchAnnotation(idx, { font_size: Number(e.target.value) })}
+                    style={{ width: '100%' }}
+                  />
+                </Field>
+                <Field label="Label Color">
+                  <input
+                    type="color"
+                    value={ann.font_color}
+                    onChange={(e) => patchAnnotation(idx, { font_color: e.target.value })}
                   />
                 </Field>
                 <Field label="Line Color">

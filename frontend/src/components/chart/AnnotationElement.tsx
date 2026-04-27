@@ -100,6 +100,7 @@ const AnnotationElement: React.FC<AnnotationElementProps> = ({
       <Group
         draggable={draggable}
         onDragEnd={(e) => onDragEnd?.(elementId, e.target.x(), e.target.y())}
+        onContextMenu={handleContextMenu}
       >
         <Line
           points={[chartArea.x, py, chartArea.x + chartArea.width, py]}
@@ -114,7 +115,7 @@ const AnnotationElement: React.FC<AnnotationElementProps> = ({
             text={label}
             fontSize={config.font_size}
             fontFamily="Arial"
-            fill={config.line_color ?? '#cc0000'}
+            fill={config.font_color ?? config.line_color ?? '#cc0000'}
           />
         )}
       </Group>
@@ -129,7 +130,6 @@ const AnnotationElement: React.FC<AnnotationElementProps> = ({
     // Try to find x position from line_value as a date or from xLabels
     let px = config.position.x;
     if (xLabels && xLabels.length > 0 && config.line_value != null) {
-      // line_value might be a year like 2008 or a date string
       const valStr = String(config.line_value);
       const frac = dateToFraction(valStr, xLabels);
       if (frac != null) {
@@ -141,6 +141,7 @@ const AnnotationElement: React.FC<AnnotationElementProps> = ({
       <Group
         draggable={draggable}
         onDragEnd={(e) => onDragEnd?.(elementId, e.target.x(), e.target.y())}
+        onContextMenu={handleContextMenu}
       >
         <Line
           points={[px, chartArea.y, px, chartArea.y + chartArea.height]}
@@ -155,7 +156,7 @@ const AnnotationElement: React.FC<AnnotationElementProps> = ({
             text={label}
             fontSize={config.font_size}
             fontFamily="Arial"
-            fill={config.line_color ?? '#cc0000'}
+            fill={config.font_color ?? config.line_color ?? '#cc0000'}
             rotation={90}
           />
         )}
@@ -180,12 +181,15 @@ const AnnotationElement: React.FC<AnnotationElementProps> = ({
       }
     }
 
+    const label = config.text ?? '';
+
     return (
       <Group
         x={bandX}
         y={chartArea.y}
         draggable={draggable}
         onDragEnd={(e) => onDragEnd?.(elementId, e.target.x(), e.target.y())}
+        onContextMenu={handleContextMenu}
       >
         <Rect
           width={bandWidth}
@@ -193,6 +197,16 @@ const AnnotationElement: React.FC<AnnotationElementProps> = ({
           fill={config.band_color ?? '#cccccc'}
           opacity={0.3}
         />
+        {label && (
+          <Text
+            x={4}
+            y={4}
+            text={label}
+            fontSize={config.font_size}
+            fontFamily="Arial"
+            fill={config.font_color ?? '#333333'}
+          />
+        )}
       </Group>
     );
   }
