@@ -150,10 +150,11 @@ export interface ChartContext {
 }
 
 export interface AIResponse {
-  type: string; // "chart_modify" | "data_qa" | "summary_update"
+  type: string; // "chart_modify" | "data_qa" | "summary_update" | "suggestion"
   message: string;
   chart_delta: ChartConfigDelta | null;
-  replace_summary?: boolean; // for summary_update: true=replace, false=append
+  replace_summary?: boolean;
+  suggestions?: { label: string; delta: ChartConfigDelta }[] | null;
 }
 
 // --- Project ---
@@ -217,5 +218,6 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   chartDelta?: ChartConfigDelta;
+  suggestions?: { label: string; delta: ChartConfigDelta }[];
   timestamp: string;
 }

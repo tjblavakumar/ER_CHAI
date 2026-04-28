@@ -11,18 +11,12 @@ import DataTableElement from './chart/DataTableElement';
 import ContextMenu from './ContextMenu';
 import type { ChartState, Position } from '../types';
 
-// Canvas dimensions
-const STAGE_WIDTH = 1200;
-const STAGE_HEIGHT = 700;
+// Default canvas dimensions (overridden by store)
+const DEFAULT_STAGE_WIDTH = 1400;
+const DEFAULT_STAGE_HEIGHT = 800;
 
 // Chart area with margins
-const MARGIN = { top: 50, right: 30, bottom: 60, left: 70 };
-const CHART_AREA = {
-  x: MARGIN.left,
-  y: MARGIN.top,
-  width: STAGE_WIDTH - MARGIN.left - MARGIN.right,
-  height: STAGE_HEIGHT - MARGIN.top - MARGIN.bottom - 80, // leave room for data table
-};
+const MARGIN = { top: 50, right: 120, bottom: 60, left: 70 };
 
 const ZOOM_MIN = 0.3;
 const ZOOM_MAX = 3.0;
@@ -73,6 +67,17 @@ const CanvasEditor: React.FC = () => {
   const datasetRows = useAppStore((s) => s.datasetRows);
   const setChartState = useAppStore((s) => s.setChartState);
   const setContextMenuTarget = useAppStore((s) => s.setContextMenuTarget);
+  const canvasWidth = useAppStore((s) => s.canvasWidth);
+  const canvasHeight = useAppStore((s) => s.canvasHeight);
+
+  const STAGE_WIDTH = canvasWidth || DEFAULT_STAGE_WIDTH;
+  const STAGE_HEIGHT = canvasHeight || DEFAULT_STAGE_HEIGHT;
+  const CHART_AREA = {
+    x: MARGIN.left,
+    y: MARGIN.top,
+    width: STAGE_WIDTH - MARGIN.left - MARGIN.right,
+    height: STAGE_HEIGHT - MARGIN.top - MARGIN.bottom - 80,
+  };
 
   const [zoom, setZoom] = useState(1);
   const stageRef = useRef<any>(null);

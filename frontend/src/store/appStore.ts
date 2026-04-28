@@ -39,6 +39,16 @@ export interface AppState {
   isLoading: boolean;
   loadingMessage: string;
 
+  // Canvas size
+  canvasWidth: number;
+  canvasHeight: number;
+
+  // Chart preview overlay
+  previewVariants: { label: string; description: string; chartState: ChartState }[];
+  previewDatasetRows: Record<string, unknown>[] | null;
+  previewDatasetInfo: DatasetInfo | null;
+  showPreviewOverlay: boolean;
+
   // Actions
   setChartState: (state: ChartState) => void;
   undo: () => void;
@@ -57,6 +67,9 @@ export interface AppState {
   setDatasetInfo: (info: DatasetInfo | null) => void;
   setDatasetRows: (rows: Record<string, unknown>[] | null) => void;
   setReferenceImageFile: (file: File | null) => void;
+  setPreviewVariants: (variants: { label: string; description: string; chartState: ChartState }[], rows: Record<string, unknown>[] | null, info: DatasetInfo | null) => void;
+  setShowPreviewOverlay: (show: boolean) => void;
+  setCanvasSize: (width: number, height: number) => void;
   resetForNewChart: () => void;
 }
 
@@ -91,6 +104,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   aiChatOpen: false,
   isLoading: false,
   loadingMessage: '',
+
+  // Canvas size
+  canvasWidth: 1400,
+  canvasHeight: 800,
+
+  // Chart preview overlay
+  previewVariants: [],
+  previewDatasetRows: null,
+  previewDatasetInfo: null,
+  showPreviewOverlay: false,
 
   // Actions
   setChartState: (newState: ChartState) => {
@@ -137,6 +160,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   setDatasetInfo: (info) => set({ datasetInfo: info }),
   setDatasetRows: (rows) => set({ datasetRows: rows }),
   setReferenceImageFile: (file) => set({ referenceImageFile: file }),
+  setPreviewVariants: (variants, rows, info) => set({
+    previewVariants: variants,
+    previewDatasetRows: rows,
+    previewDatasetInfo: info,
+    showPreviewOverlay: true,
+  }),
+  setShowPreviewOverlay: (show) => set({ showPreviewOverlay: show }),
+  setCanvasSize: (width, height) => set({ canvasWidth: width, canvasHeight: height }),
 
   resetForNewChart: () =>
     set({
@@ -152,5 +183,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       contextMenuTarget: null,
       currentProjectName: null,
       referenceImageFile: null,
+      previewVariants: [],
+      previewDatasetRows: null,
+      previewDatasetInfo: null,
+      showPreviewOverlay: false,
+      canvasWidth: 1400,
+      canvasHeight: 800,
     }),
 }));

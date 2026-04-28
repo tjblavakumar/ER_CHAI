@@ -303,10 +303,11 @@ class ChartConfigDelta(BaseModel):
 
 
 class AIResponse(BaseModel):
-    type: str  # "chart_modify" | "data_qa" | "summary_update"
+    type: str  # "chart_modify" | "data_qa" | "summary_update" | "suggestion"
     message: str  # text response to user
     chart_delta: ChartConfigDelta | None = None  # only for chart_modify
     replace_summary: bool = False  # for summary_update: True=replace, False=append
+    suggestions: list[dict] | None = None  # for suggestion: list of {label, delta} options
 
 
 # --- Project ---

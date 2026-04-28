@@ -74,16 +74,23 @@ class AIAssistantHandler:
         intent = await self._classify_intent(message)
 
         if intent == "chart_modify":
-            delta = await self._handle_chart_modify(session_id, message, chart_context)
+            suggestions = await self._generate_suggestions(session_id, message, chart_context)
             self._sessions[session_id].append({"role": "user", "content": message})
+            # Always return as suggestions for user to choose
+            suggestion_dicts = [
+                {"label": s["label"], "delta": s["delta"].model_dump(exclude_none=True)}
+                for s in suggestions
+            ]
+            labels = ", ".join(s["label"] for s in suggestions)
             self._sessions[session_id].append({
                 "role": "assistant",
-                "content": f"Applied chart modifications: {delta.model_dump_json(exclude_none=True)}",
+                "content": f"Suggested options: {labels}",
             })
             return AIResponse(
-                type="chart_modify",
-                message="I've applied the requested chart modifications.",
-                chart_delta=delta,
+                type="suggestion",
+                message=suggestions[0].get("message", "Here are a few professional options. Pick the one you prefer:"),
+                chart_delta=None,
+                suggestions=suggestion_dicts,
             )
         elif intent == "summary_update":
             summary_text, replace_flag = await self._handle_summary_update(session_id, message, chart_context)
@@ -142,6 +149,112 @@ class AIAssistantHandler:
 
         # Default to data_qa if classification is ambiguous
         return "data_qa"
+
+    # -- Suggestion generation -----------------------------------------------
+
+    async def _generate_suggestions(
+        self,
+        session_id: str,
+        message: str,
+        chart_context: ChartContext,
+    ) -> list[dict]:
+        """Generate multiple chart modification suggestions for the user to choose from.
+
+        Returns a list of dicts with 'label', 'delta' (ChartConfigDelta), and 'message'.
+        For simple/structural changes, returns a single option (applied directly).
+        For styling changes (colors, fonts), returns 2-3 professional options.
+        """
+        history = self._sessions.get(session_id, [])
+        history_text = ""
+        if history:
+            history_text = "Previous conversation:\n"
+            for entry in history[-6:]:
+                history_text += f"{entry['role']}: {entry['content']}\n"
+            history_text += "\n"
+
+        chart_state_json = chart_context.chart_state.model_dump_json()
+
+        prompt = (
+            "You are an AI style advisor for a professional chart editing application.\n"
+            "The user wants to modify their chart. You MUST provide multiple options.\n\n"
+            f"{history_text}"
+            f"Current chart state:\n{chart_state_json}\n\n"
+            f"User request: {message}\n\n"
+            "CRITICAL RULES:\n"
+            "1. You MUST ALWAYS return 2-3 options in the suggestions array.\n"
+            "2. For COLOR changes: suggest 3 professional, publication-quality color palettes.\n"
+            "3. For FONT SIZE changes: suggest 3 sizes (e.g., 'Compact 10px', 'Standard 14px', 'Presentation 18px').\n"
+            "4. For STRUCTURAL changes (add/delete annotation, toggle visibility, change chart type): "
+            "still return 2 options (e.g., the requested change + an alternative).\n"
+            "5. For THEME changes: suggest 3 complete color schemes.\n"
+            "6. NEVER return just 1 suggestion. Always give the user choices.\n\n"
+            "Return EXACTLY this JSON format:\n"
+            '{"suggestions": [\n'
+            '  {"label": "Short Name", "description": "Why this option is good", "delta": {chart delta}},\n'
+            '  {"label": "Short Name 2", "description": "Why this is different", "delta": {chart delta}},\n'
+            '  {"label": "Short Name 3", "description": "Another approach", "delta": {chart delta}}\n'
+            ']}\n\n'
+            "Each delta follows the chart modification format. "
+            "Valid fields: chart_type, title, axes, series, legend, gridlines, "
+            "annotations, data_table, bar_grouping, display_transforms.\n\n"
+            "IMPORTANT: If you include 'series' in a delta, each series MUST have ALL fields: "
+            "name, column, chart_type, color, line_width, visible. Copy from current state.\n"
+            "If you include 'legend', it MUST have ALL fields: visible, position, entries.\n\n"
+            "Return ONLY valid JSON. No markdown fences. No explanation outside JSON."
+        )
+
+        response_text = await self._invoke_bedrock(prompt)
+        logger.info("AI suggestions raw response: %s", response_text[:500])
+
+        # Parse the suggestions
+        text = response_text.strip()
+        if text.startswith("```"):
+            lines = text.split("\n")
+            lines = [l for l in lines if not l.strip().startswith("```")]
+            text = "\n".join(lines)
+
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            # Fallback: treat as a single direct modification
+            delta = await self._handle_chart_modify(session_id, message, chart_context)
+            return [{"label": "Apply Change", "delta": delta, "message": "Applied the change."}]
+
+        suggestions_raw = data.get("suggestions", [])
+        if not suggestions_raw or not isinstance(suggestions_raw, list):
+            # Fallback
+            delta = await self._handle_chart_modify(session_id, message, chart_context)
+            return [{"label": "Apply Change", "delta": delta, "message": "Applied the change."}]
+
+        results = []
+        for s in suggestions_raw:
+            if not isinstance(s, dict) or "delta" not in s:
+                continue
+            try:
+                # Use the same delta parser with merging
+                delta_json = json.dumps(s["delta"])
+                delta = self._parse_chart_delta(delta_json, chart_context.chart_state)
+                label = s.get("label", f"Option {len(results) + 1}")
+                desc = s.get("description", "")
+                results.append({
+                    "label": label,
+                    "delta": delta,
+                    "message": desc,
+                })
+            except Exception as exc:
+                logger.warning("Failed to parse suggestion delta: %s", exc)
+                continue
+
+        if not results:
+            # Fallback
+            delta = await self._handle_chart_modify(session_id, message, chart_context)
+            return [{"label": "Apply Change", "delta": delta, "message": "Applied the change."}]
+
+        # Add a message to the first suggestion
+        if results:
+            results[0]["message"] = "Here are a few professional options. Pick the one you prefer:"
+
+        return results
 
     # -- Chart modification -------------------------------------------------
 

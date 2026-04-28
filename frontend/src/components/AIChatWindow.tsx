@@ -215,11 +215,10 @@ const AIChatWindow: React.FC = () => {
       const response = await aiChat(chatSessionId, text, context);
 
       if (response.type === 'chart_modify' && response.chart_delta) {
-        // Apply delta — use latest state to avoid stale closure
+        // Direct apply (single option from AI)
         const latestChartState = useAppStore.getState().chartState;
         if (latestChartState) {
           const newState = applyDelta(latestChartState, response.chart_delta);
-          // Force new object reference to ensure React re-render
           useAppStore.getState().setChartState({ ...newState });
         }
         setLastModifyIndex(chatMessages.length + 1);
@@ -228,6 +227,14 @@ const AIChatWindow: React.FC = () => {
           role: 'assistant',
           content: response.message,
           chartDelta: response.chart_delta,
+          timestamp: new Date().toISOString(),
+        });
+      } else if (response.type === 'suggestion' && response.suggestions && response.suggestions.length > 0) {
+        // Multiple suggestions — show as clickable options
+        addChatMessage({
+          role: 'assistant',
+          content: response.message,
+          suggestions: response.suggestions as { label: string; delta: ChartConfigDelta }[],
           timestamp: new Date().toISOString(),
         });
       } else if (response.type === 'summary_update') {
@@ -321,13 +328,48 @@ const AIChatWindow: React.FC = () => {
                   color: '#222',
                   borderRadius: 10,
                   padding: '8px 12px',
-                  maxWidth: '80%',
+                  maxWidth: '85%',
                   fontSize: 13,
                   lineHeight: 1.45,
                   wordBreak: 'break-word',
                 }}
               >
                 {msg.content}
+                {/* Suggestion buttons */}
+                {msg.suggestions && msg.suggestions.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                    {msg.suggestions.map((s, si) => (
+                      <button
+                        key={si}
+                        onClick={() => {
+                          const latestState = useAppStore.getState().chartState;
+                          if (latestState) {
+                            const newState = applyDelta(latestState, s.delta);
+                            useAppStore.getState().setChartState({ ...newState });
+                            addChatMessage({
+                              role: 'assistant',
+                              content: `Applied: ${s.label}`,
+                              timestamp: new Date().toISOString(),
+                            });
+                          }
+                        }}
+                        style={{
+                          padding: '6px 12px',
+                          fontSize: 12,
+                          border: '1px solid #1a73e8',
+                          borderRadius: 6,
+                          background: '#e8f0fe',
+                          color: '#1a73e8',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          fontWeight: 500,
+                        }}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}

@@ -9,6 +9,8 @@ import ControlsPanel from './components/ControlsPanel';
 import SummaryEditor from './components/SummaryEditor';
 import ExportToolbar from './components/ExportToolbar';
 import AIChatWindow from './components/AIChatWindow';
+import ChartPreviewOverlay from './components/ChartPreviewOverlay';
+import { generateChartVariants } from './utils/chartVariants';
 
 // ---------------------------------------------------------------------------
 // Resizable divider hook
@@ -246,6 +248,7 @@ const DataIngestionBar: React.FC = () => {
   const setIsLoading = useAppStore((s) => s.setIsLoading);
   const setLoadingMessage = useAppStore((s) => s.setLoadingMessage);
   const setReferenceImageFile = useAppStore((s) => s.setReferenceImageFile);
+  const setPreviewVariants = useAppStore((s) => s.setPreviewVariants);
   const isLoading = useAppStore((s) => s.isLoading);
 
   const [fredUrl, setFredUrl] = useState('');
@@ -271,10 +274,10 @@ const DataIngestionBar: React.FC = () => {
           : 'Downloading data from FRED...',
       );
       const result = await ingestFromUrl(url, refImage);
-      setLoadingMessage('Rendering chart...');
-      setChartState(result.chart_state);
-      setDatasetInfo(result.dataset_info);
-      setDatasetRows(result.dataset_rows ?? null);
+      setLoadingMessage('Generating chart previews...');
+      // Generate variants and show preview overlay
+      const variants = generateChartVariants(result.chart_state);
+      setPreviewVariants(variants, result.dataset_rows ?? null, result.dataset_info);
       setFredUrl('');
       if (fredImageInputRef.current) fredImageInputRef.current.value = '';
     } catch {
@@ -302,10 +305,11 @@ const DataIngestionBar: React.FC = () => {
         ? 'Parsing data and analyzing reference image (this may take a moment)...'
         : 'Parsing data and generating chart...');
       const result = await ingestFromFile(file, refImage);
-      setLoadingMessage('Rendering chart...');
-      setChartState(result.chart_state);
-      setDatasetInfo(result.dataset_info);
-      setDatasetRows(result.dataset_rows ?? null);
+      setLoadingMessage('Generating chart previews...');
+      // Generate variants — if reference image was provided, the result already has reference styling
+      const baseState = result.chart_state;
+      const variants = generateChartVariants(baseState, refImage ? baseState : null);
+      setPreviewVariants(variants, result.dataset_rows ?? null, result.dataset_info);
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (imageInputRef.current) imageInputRef.current.value = '';
     } catch {
@@ -503,10 +507,29 @@ const App: React.FC = () => {
   const chartState = useAppStore((s) => s.chartState);
   const referenceImageFile = useAppStore((s) => s.referenceImageFile);
   const setChartState = useAppStore((s) => s.setChartState);
+  const setDatasetInfo = useAppStore((s) => s.setDatasetInfo);
   const setDatasetRows = useAppStore((s) => s.setDatasetRows);
   const setIsLoading = useAppStore((s) => s.setIsLoading);
   const setLoadingMessage = useAppStore((s) => s.setLoadingMessage);
   const setSummaryText = useAppStore((s) => s.setSummaryText);
+
+  // Chart preview overlay
+  const previewVariants = useAppStore((s) => s.previewVariants);
+  const previewDatasetRows = useAppStore((s) => s.previewDatasetRows);
+  const previewDatasetInfo = useAppStore((s) => s.previewDatasetInfo);
+  const showPreviewOverlay = useAppStore((s) => s.showPreviewOverlay);
+  const setShowPreviewOverlay = useAppStore((s) => s.setShowPreviewOverlay);
+
+  const handlePreviewSelect = useCallback((selectedState: import('./types').ChartState) => {
+    setChartState(selectedState);
+    setDatasetRows(previewDatasetRows);
+    if (previewDatasetInfo) setDatasetInfo(previewDatasetInfo);
+    setShowPreviewOverlay(false);
+  }, [setChartState, setDatasetRows, setDatasetInfo, previewDatasetRows, previewDatasetInfo, setShowPreviewOverlay]);
+
+  const handlePreviewCancel = useCallback(() => {
+    setShowPreviewOverlay(false);
+  }, [setShowPreviewOverlay]);
 
   // Resizable panels
   const leftSidebar = useResizable('horizontal', 220, 150, 400);
@@ -636,7 +659,7 @@ const App: React.FC = () => {
           >
             <h1 style={{ fontSize: 18, margin: 0, display: 'flex', alignItems: 'baseline', gap: 8 }}>
               CHAI : Chart AI Assistant
-              <span style={{ fontSize: 11, fontWeight: 400, color: '#888', fontStyle: 'italic' }}>v2.0</span>
+              <span style={{ fontSize: 11, fontWeight: 400, color: '#888', fontStyle: 'italic' }}>v3</span>
             </h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -735,6 +758,16 @@ const App: React.FC = () => {
 
       {/* Floating overlay: AI Chat Window */}
       <AIChatWindow />
+
+      {/* Chart preview overlay */}
+      {showPreviewOverlay && previewVariants.length > 0 && (
+        <ChartPreviewOverlay
+          variants={previewVariants}
+          datasetRows={previewDatasetRows}
+          onSelect={handlePreviewSelect}
+          onCancel={handlePreviewCancel}
+        />
+      )}
     </div>
   );
 };
