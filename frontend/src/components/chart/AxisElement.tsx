@@ -7,6 +7,7 @@ interface AxisElementProps {
   chartArea: { x: number; y: number; width: number; height: number };
   draggable?: boolean;
   xLabels?: string[];
+  hideXLabels?: boolean;
   onDragEnd?: (id: string, x: number, y: number) => void;
   onContextMenu?: (id: string, x: number, y: number) => void;
 }
@@ -43,6 +44,7 @@ const AxisElement: React.FC<AxisElementProps> = ({
   chartArea,
   draggable = true,
   xLabels,
+  hideXLabels = false,
   onDragEnd,
   onContextMenu,
 }) => {
@@ -108,7 +110,7 @@ const AxisElement: React.FC<AxisElementProps> = ({
       })}
 
       {/* X-axis ticks and labels */}
-      {xLabels && xLabels.length > 0
+      {!hideXLabels && (xLabels && xLabels.length > 0
         ? Array.from({ length: TICK_COUNT + 1 }, (_, i) => {
             const idx = Math.round((i / TICK_COUNT) * (xLabels.length - 1));
             const label = shortenDate(xLabels[idx] ?? '');
@@ -146,7 +148,7 @@ const AxisElement: React.FC<AxisElementProps> = ({
                 />
               </Group>
             );
-          })}
+          }))}
 
       {/* Y-axis label */}
       <Group

@@ -62,6 +62,8 @@ function applyDelta(state: ChartState, delta: ChartConfigDelta): ChartState {
     ...(delta.gridlines != null && { gridlines: delta.gridlines }),
     annotations: mergedAnnotations,
     ...(delta.data_table != null && { data_table: delta.data_table }),
+    ...(delta.bar_grouping != null && { bar_grouping: delta.bar_grouping }),
+    ...(delta.display_transforms != null && { display_transforms: delta.display_transforms }),
   };
 }
 
@@ -213,9 +215,13 @@ const AIChatWindow: React.FC = () => {
       const response = await aiChat(chatSessionId, text, context);
 
       if (response.type === 'chart_modify' && response.chart_delta) {
-        // Apply delta — setChartState auto-pushes to undo history
-        const newState = applyDelta(chartState, response.chart_delta);
-        setChartState(newState);
+        // Apply delta — use latest state to avoid stale closure
+        const latestChartState = useAppStore.getState().chartState;
+        if (latestChartState) {
+          const newState = applyDelta(latestChartState, response.chart_delta);
+          // Force new object reference to ensure React re-render
+          useAppStore.getState().setChartState({ ...newState });
+        }
         setLastModifyIndex(chatMessages.length + 1);
 
         addChatMessage({

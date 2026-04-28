@@ -634,7 +634,10 @@ const App: React.FC = () => {
               flexShrink: 0,
             }}
           >
-            <h1 style={{ fontSize: 18, margin: 0 }}>CHAI : Chart AI Assistant</h1>
+            <h1 style={{ fontSize: 18, margin: 0, display: 'flex', alignItems: 'baseline', gap: 8 }}>
+              CHAI : Chart AI Assistant
+              <span style={{ fontSize: 11, fontWeight: 400, color: '#888', fontStyle: 'italic' }}>v2.0</span>
+            </h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <button

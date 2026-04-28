@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState, useRef } from 'react';
 import { Stage, Layer } from 'react-konva';
 import { useAppStore } from '../store/appStore';
 import TitleElement from './chart/TitleElement';
@@ -24,11 +24,76 @@ const CHART_AREA = {
   height: STAGE_HEIGHT - MARGIN.top - MARGIN.bottom - 80, // leave room for data table
 };
 
+const ZOOM_MIN = 0.3;
+const ZOOM_MAX = 3.0;
+const ZOOM_STEP = 0.15;
+
+/**
+ * Apply display transforms to dataset rows (non-destructive).
+ * Returns a new array of rows with transformed values.
+ */
+function applyDisplayTransforms(
+  rows: Record<string, unknown>[],
+  transforms: import('../types').DisplayTransform[],
+): Record<string, unknown>[] {
+  if (!transforms || transforms.length === 0) return rows;
+  return rows.map((row) => {
+    const newRow = { ...row };
+    for (const t of transforms) {
+      const val = Number(newRow[t.column]);
+      if (isNaN(val)) continue;
+      let result = val;
+      switch (t.operation) {
+        case 'multiply':
+          result = val * (t.factor ?? 1);
+          break;
+        case 'divide':
+          result = (t.factor ?? 1) !== 0 ? val / (t.factor ?? 1) : val;
+          break;
+        case 'add':
+          result = val + (t.factor ?? 0);
+          break;
+        case 'subtract':
+          result = val - (t.factor ?? 0);
+          break;
+        case 'normalize':
+          result = (t.base_value ?? 1) !== 0 ? (val / (t.base_value ?? 1)) * 100 : val;
+          break;
+        default:
+          break;
+      }
+      newRow[t.column] = result;
+    }
+    return newRow;
+  });
+}
+
 const CanvasEditor: React.FC = () => {
   const chartState = useAppStore((s) => s.chartState);
   const datasetRows = useAppStore((s) => s.datasetRows);
   const setChartState = useAppStore((s) => s.setChartState);
   const setContextMenuTarget = useAppStore((s) => s.setContextMenuTarget);
+
+  const [zoom, setZoom] = useState(1);
+  const stageRef = useRef<any>(null);
+
+  const handleZoomIn = useCallback(() => {
+    setZoom((z) => Math.min(ZOOM_MAX, z + ZOOM_STEP));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoom((z) => Math.max(ZOOM_MIN, z - ZOOM_STEP));
+  }, []);
+
+  const handleZoomFit = useCallback(() => {
+    setZoom(1);
+  }, []);
+
+  const handleWheel = useCallback((e: any) => {
+    e.evt.preventDefault();
+    const delta = e.evt.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+    setZoom((z) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z + delta)));
+  }, []);
 
   /**
    * Persist new position to chart state on drag end (Req 7.3).
@@ -111,7 +176,11 @@ const CanvasEditor: React.FC = () => {
           );
         }
       } else if (elementId === 'data_table' && chartState.data_table) {
-        if (property === 'font_size') {
+        if (property === '_hide') {
+          updated.data_table = { ...chartState.data_table, visible: false };
+        } else if (property === '_delete') {
+          updated.data_table = null;
+        } else if (property === 'font_size') {
           updated.data_table = { ...chartState.data_table, font_size: value as number };
         }
       }
@@ -203,6 +272,12 @@ const CanvasEditor: React.FC = () => {
     });
   }, [datasetRows, chartState]);
 
+  // Apply display transforms to filtered rows (non-destructive)
+  const transformedRows = React.useMemo(() => {
+    if (!filteredRows || !chartState?.display_transforms?.length) return filteredRows;
+    return applyDisplayTransforms(filteredRows, chartState.display_transforms);
+  }, [filteredRows, chartState?.display_transforms]);
+
   // Recompute xLabels from filtered rows
   const filteredXLabels = React.useMemo(() => {
     if (!filteredRows || filteredRows.length === 0) return xLabels;
@@ -251,10 +326,57 @@ const CanvasEditor: React.FC = () => {
 
   return (
     <div style={{ position: 'relative', display: 'inline-block' }}>
+      {/* Zoom controls */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 8,
+          right: 8,
+          zIndex: 100,
+          display: 'flex',
+          gap: 4,
+          background: 'rgba(255,255,255,0.9)',
+          borderRadius: 6,
+          padding: '4px 6px',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
+          fontSize: 12,
+        }}
+      >
+        <button
+          onClick={handleZoomOut}
+          style={{ width: 28, height: 28, cursor: 'pointer', border: '1px solid #ccc', borderRadius: 4, background: '#fff', fontSize: 16, lineHeight: '26px' }}
+          title="Zoom out"
+        >
+          −
+        </button>
+        <span
+          style={{ minWidth: 44, textAlign: 'center', lineHeight: '28px', fontWeight: 600, color: '#555' }}
+        >
+          {Math.round(zoom * 100)}%
+        </span>
+        <button
+          onClick={handleZoomIn}
+          style={{ width: 28, height: 28, cursor: 'pointer', border: '1px solid #ccc', borderRadius: 4, background: '#fff', fontSize: 16, lineHeight: '26px' }}
+          title="Zoom in"
+        >
+          +
+        </button>
+        <button
+          onClick={handleZoomFit}
+          style={{ height: 28, cursor: 'pointer', border: '1px solid #ccc', borderRadius: 4, background: '#fff', fontSize: 11, padding: '0 8px' }}
+          title="Reset zoom"
+        >
+          Fit
+        </button>
+      </div>
       <Stage
-        width={STAGE_WIDTH}
-        height={STAGE_HEIGHT}
+        ref={stageRef}
+        width={STAGE_WIDTH * zoom}
+        height={STAGE_HEIGHT * zoom}
+        scaleX={zoom}
+        scaleY={zoom}
         style={{ background: '#ffffff', border: '1px solid #ddd' }}
+        onWheel={handleWheel}
       >
         <Layer>
           {/* Gridlines (behind data) */}
@@ -270,7 +392,11 @@ const CanvasEditor: React.FC = () => {
             chartArea={CHART_AREA}
             yMin={yMin}
             yMax={yMax}
-            datasetRows={filteredRows}
+            datasetRows={transformedRows}
+            barGrouping={chartState.bar_grouping}
+            categoryColumn={chartState.category_column}
+            groupColumn={chartState.group_column}
+            barLabelFontSize={chartState.axes.tick_font_size ?? 10}
           />
 
           {/* Axes */}
@@ -278,6 +404,7 @@ const CanvasEditor: React.FC = () => {
             config={chartState.axes}
             chartArea={CHART_AREA}
             xLabels={filteredXLabels}
+            hideXLabels={chartState.bar_grouping === 'by_category'}
             onDragEnd={handleDragEnd}
             onContextMenu={handleContextMenu}
           />
@@ -319,7 +446,7 @@ const CanvasEditor: React.FC = () => {
           {chartState.data_table && (
             <DataTableElement
               config={{ ...chartState.data_table, position: dataTablePos }}
-              datasetRows={filteredRows}
+              datasetRows={transformedRows}
               seriesLabels={seriesLabels}
               seriesColors={seriesColors}
               onDragEnd={handleDragEnd}

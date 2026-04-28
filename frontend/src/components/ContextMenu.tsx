@@ -167,6 +167,48 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ onApplyChange }) => {
           </button>
         </div>
       )}
+
+      {/* Hide / Delete for data table */}
+      {contextMenuTarget.elementId === 'data_table' && (
+        <div style={{ marginTop: 10, borderTop: '1px solid #eee', paddingTop: 8, display: 'flex', gap: 6 }}>
+          <button
+            onClick={() => {
+              onApplyChange('data_table', '_hide', 1);
+            }}
+            style={{
+              flex: 1,
+              padding: '5px 0',
+              background: '#fff8e1',
+              color: '#f57f17',
+              border: '1px solid #ffe082',
+              borderRadius: 4,
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 600,
+            }}
+          >
+            Hide
+          </button>
+          <button
+            onClick={() => {
+              onApplyChange('data_table', '_delete', 1);
+            }}
+            style={{
+              flex: 1,
+              padding: '5px 0',
+              background: '#ffebee',
+              color: '#c62828',
+              border: '1px solid #ef9a9a',
+              borderRadius: 4,
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 600,
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      )}
     </div>
   );
 };

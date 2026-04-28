@@ -1,5 +1,5 @@
 import React from 'react';
-import { Group, Line, Rect } from 'react-konva';
+import { Group, Line, Rect, Text } from 'react-konva';
 import type { SeriesConfig } from '../../types';
 
 interface DataSeriesElementProps {
@@ -8,6 +8,10 @@ interface DataSeriesElementProps {
   yMin: number;
   yMax: number;
   datasetRows?: Record<string, unknown>[] | null;
+  barGrouping?: string;
+  categoryColumn?: string | null;
+  groupColumn?: string | null;
+  barLabelFontSize?: number;
 }
 
 /**
@@ -43,16 +47,196 @@ function generatePlaceholderData(seriesName: string, count: number): number[] {
   return data;
 }
 
+/**
+ * Clean up category/group labels (remove newlines, trim).
+ */
+function cleanLabel(s: unknown): string {
+  return String(s ?? '').replace(/[\r\n]+/g, ' ').trim();
+}
+
+/**
+ * Render categorical grouped bar chart.
+ * X-axis = categories (e.g., Energy, Food)
+ * Sub-bars within each category = groups (e.g., 12-month, 6-month)
+ */
+const CategoricalBarChart: React.FC<{
+  series: SeriesConfig[];
+  chartArea: { x: number; y: number; width: number; height: number };
+  yMin: number;
+  yMax: number;
+  datasetRows: Record<string, unknown>[];
+  categoryColumn: string;
+  groupColumn: string;
+  labelFontSize: number;
+}> = ({ series, chartArea, yMin, yMax, datasetRows, categoryColumn, groupColumn, labelFontSize }) => {
+  const { x, y, width, height } = chartArea;
+  const yRange = yMax - yMin || 1;
+
+  // Extract unique categories and groups preserving order
+  const seen = new Set<string>();
+  const categories: string[] = [];
+  for (const row of datasetRows) {
+    const cat = cleanLabel(row[categoryColumn]);
+    if (!seen.has(cat)) {
+      seen.add(cat);
+      categories.push(cat);
+    }
+  }
+
+  const seenGroups = new Set<string>();
+  const groups: string[] = [];
+  for (const row of datasetRows) {
+    const grp = cleanLabel(row[groupColumn]);
+    if (!seenGroups.has(grp)) {
+      seenGroups.add(grp);
+      groups.push(grp);
+    }
+  }
+
+  // Build a lookup: category -> group -> value
+  const valueMap = new Map<string, Map<string, number>>();
+  // Also find the value column (first numeric column that's not in series names)
+  let valueColumn: string | null = null;
+  if (datasetRows.length > 0) {
+    for (const key of Object.keys(datasetRows[0])) {
+      if (key !== categoryColumn && key !== groupColumn) {
+        const val = datasetRows[0][key];
+        if (typeof val === 'number' || (typeof val === 'string' && !isNaN(Number(val)) && val !== '')) {
+          valueColumn = key;
+          break;
+        }
+      }
+    }
+  }
+
+  if (valueColumn) {
+    for (const row of datasetRows) {
+      const cat = cleanLabel(row[categoryColumn]);
+      const grp = cleanLabel(row[groupColumn]);
+      const val = Number(row[valueColumn]);
+      if (!isNaN(val)) {
+        if (!valueMap.has(cat)) valueMap.set(cat, new Map());
+        valueMap.get(cat)!.set(grp, val);
+      }
+    }
+  }
+
+  // Build color map from series config
+  const colorMap = new Map<string, string>();
+  for (const s of series) {
+    colorMap.set(s.name, s.color);
+  }
+
+  const numCategories = categories.length;
+  const numGroups = groups.length;
+  if (numCategories === 0 || numGroups === 0) return null;
+
+  // Layout: divide width into category slots, with gaps between categories
+  const categoryGap = width * 0.15 / numCategories; // gap between category groups
+  const categorySlotWidth = (width - categoryGap * (numCategories - 1)) / numCategories;
+  const barWidth = (categorySlotWidth * 0.8) / numGroups;
+  const barGroupOffset = categorySlotWidth * 0.1; // padding within category
+
+  // Baseline y position (where value = 0)
+  const baselineY = y + height - ((0 - yMin) / yRange) * height;
+
+  return (
+    <Group>
+      {categories.map((cat, catIdx) => {
+        const catX = x + catIdx * (categorySlotWidth + categoryGap);
+        const catValues = valueMap.get(cat);
+
+        return (
+          <Group key={cat}>
+            {groups.map((grp, grpIdx) => {
+              const val = catValues?.get(grp) ?? 0;
+              const color = colorMap.get(grp) ?? '#999';
+              const barX = catX + barGroupOffset + grpIdx * barWidth;
+
+              // Bar extends from baseline to value
+              const valY = y + height - ((val - yMin) / yRange) * height;
+              const barTop = Math.min(valY, baselineY);
+              const barH = Math.abs(valY - baselineY);
+
+              return (
+                <React.Fragment key={`${cat}-${grp}`}>
+                  <Rect
+                    x={barX}
+                    y={barTop}
+                    width={barWidth * 0.9}
+                    height={Math.max(barH, 1)}
+                    fill={color}
+                    opacity={0.85}
+                  />
+                  {/* Value label on top of bar */}
+                  <Text
+                    x={barX}
+                    y={val >= 0 ? barTop - 14 : barTop + barH + 2}
+                    text={val.toFixed(1) + '%'}
+                    fontSize={labelFontSize}
+                    fontFamily="Arial"
+                    fill="#333"
+                    width={barWidth * 0.9}
+                    align="center"
+                  />
+                </React.Fragment>
+              );
+            })}
+            {/* Category label below the group */}
+            <Text
+              x={catX}
+              y={y + height + 8}
+              text={cat}
+              fontSize={labelFontSize}
+              fontFamily="Arial"
+              fill="#333"
+              width={categorySlotWidth}
+              align="center"
+            />
+          </Group>
+        );
+      })}
+    </Group>
+  );
+};
+
 const DataSeriesElement: React.FC<DataSeriesElementProps> = ({
   series,
   chartArea,
   yMin,
   yMax,
   datasetRows,
+  barGrouping,
+  categoryColumn,
+  groupColumn,
+  barLabelFontSize,
 }) => {
   const { x, y, width, height } = chartArea;
   const yRange = yMax - yMin || 1;
 
+  // Categorical grouped bar chart mode
+  if (
+    barGrouping === 'by_category' &&
+    categoryColumn &&
+    groupColumn &&
+    datasetRows &&
+    datasetRows.length > 0
+  ) {
+    return (
+      <CategoricalBarChart
+        series={series}
+        chartArea={chartArea}
+        yMin={yMin}
+        yMax={yMax}
+        datasetRows={datasetRows}
+        categoryColumn={categoryColumn}
+        groupColumn={groupColumn}
+        labelFontSize={barLabelFontSize ?? 10}
+      />
+    );
+  }
+
+  // Standard rendering (by_series / default)
   const visibleSeries = series.filter((s) => s.visible);
   const barSeriesCount = visibleSeries.filter((s) => s.chart_type === 'bar').length;
 
@@ -117,11 +301,10 @@ const DataSeriesElement: React.FC<DataSeriesElementProps> = ({
         if (s.chart_type === 'area' && validData.length > 0) {
           // Area chart: closed polygon filled to baseline
           const areaPoints = [...points];
-          // Close the polygon along the baseline
           const lastX = x + (validData[validData.length - 1].index / Math.max(dataCount - 1, 1)) * width;
           const firstX = x + (validData[0].index / Math.max(dataCount - 1, 1)) * width;
-          areaPoints.push(lastX, y + height); // bottom-right
-          areaPoints.push(firstX, y + height); // bottom-left
+          areaPoints.push(lastX, y + height);
+          areaPoints.push(firstX, y + height);
           return (
             <React.Fragment key={s.name}>
               <Line

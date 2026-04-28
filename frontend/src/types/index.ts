@@ -89,11 +89,23 @@ export interface DataTableConfig {
   columns: string[];
   font_size: number;
   max_rows: number;
-  col_width?: number;       // width per date/computed column (default 70)
-  row_height?: number;      // height per data row (default 22)
-  series_col_width?: number; // width of the series name column (default 120)
+  col_width?: number;
+  row_height?: number;
+  series_col_width?: number;
   computed_columns?: ComputedColumnDefinition[];
   computed_values?: Record<string, number | null>;
+  // Custom table mode
+  custom_headers?: string[];
+  custom_rows?: Record<string, string>[];
+}
+
+export interface DisplayTransform {
+  column: string;
+  operation: string; // "multiply" | "divide" | "add" | "subtract" | "percent_change" | "normalize"
+  factor?: number;
+  base_value?: number | null;
+  suffix?: string;
+  label?: string;
 }
 
 export interface ChartState {
@@ -108,6 +120,12 @@ export interface ChartState {
   elements_positions: Record<string, Position>;
   dataset_path: string;
   dataset_columns: string[];
+  // Categorical bar chart support
+  bar_grouping?: string;       // "by_series" | "by_category"
+  category_column?: string | null;  // column for x-axis categories
+  group_column?: string | null;     // column for sub-groups within each category
+  // Display transforms
+  display_transforms?: DisplayTransform[];
 }
 
 // --- AI ---
@@ -121,6 +139,8 @@ export interface ChartConfigDelta {
   gridlines?: GridlineConfig | null;
   annotations?: AnnotationConfig[] | null;
   data_table?: DataTableConfig | null;
+  bar_grouping?: string | null;
+  display_transforms?: DisplayTransform[] | null;
 }
 
 export interface ChartContext {

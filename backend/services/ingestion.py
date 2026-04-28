@@ -182,8 +182,12 @@ class DataIngestionService:
                 f"The uploaded file '{filename}' contains no data."
             )
 
-        # Detect and pivot long-format data (date, key, value) to wide format
-        df = _detect_and_pivot_long_format(df)
+        # Check for categorical grouped data first (before pivoting)
+        categorical_info = _detect_categorical_data(df)
+
+        if categorical_info is None:
+            # Not categorical — try long-format pivot as before
+            df = _detect_and_pivot_long_format(df)
 
         # Persist to local file (always store as CSV)
         safe_name = re.sub(r"[^\w\-.]", "_", os.path.splitext(filename)[0])
@@ -200,11 +204,21 @@ class DataIngestionService:
             source="upload",
         )
 
-        chart_state = _build_chart_state_from_df(
-            df=df,
-            dataset_path=dataset_path,
-            title=os.path.splitext(filename)[0],
-        )
+        if categorical_info is not None:
+            chart_state = _build_categorical_chart_state(
+                df=df,
+                dataset_path=dataset_path,
+                title=os.path.splitext(filename)[0],
+                category_column=categorical_info["category_column"],
+                group_column=categorical_info["group_column"],
+                value_column=categorical_info["value_column"],
+            )
+        else:
+            chart_state = _build_chart_state_from_df(
+                df=df,
+                dataset_path=dataset_path,
+                title=os.path.splitext(filename)[0],
+            )
 
         # Apply reference image analysis if provided and analyzer is available
         if reference_image is not None and self._image_analyzer is not None:
@@ -438,6 +452,87 @@ def _detect_and_pivot_long_format(df: pd.DataFrame) -> pd.DataFrame:
         return df
 
 
+def _detect_categorical_data(df: pd.DataFrame) -> dict | None:
+    """Detect if a DataFrame represents categorical grouped data.
+
+    Categorical data indicators:
+    - Has a category column (string, few unique values, e.g., "Energy", "Food")
+    - Has a group/period column (string, few unique values, e.g., "12-month", "6-month")
+    - Has a numeric value column
+    - Does NOT have a date column (or the "period" column is not parseable as dates)
+    - The category × group combination should cover most rows (they form a grid)
+
+    Returns a dict with {category_column, group_column, value_column} if detected,
+    or None if the data is not categorical.
+    """
+    cols = list(df.columns)
+    if len(cols) < 3:
+        return None
+
+    # Find all string columns and numeric columns
+    string_cols = []
+    numeric_cols = []
+    date_col_found = False
+
+    for col in cols:
+        if pd.api.types.is_numeric_dtype(df[col]):
+            numeric_cols.append(col)
+            continue
+        if pd.api.types.is_object_dtype(df[col]) or pd.api.types.is_string_dtype(df[col]):
+            # Check if it's a date column
+            try:
+                parsed = pd.to_datetime(df[col], errors="coerce", format="mixed")
+                if parsed.notna().sum() > len(df) * 0.5:
+                    date_col_found = True
+                    continue
+            except Exception:
+                pass
+            string_cols.append(col)
+
+    # Need at least 2 string columns and 1 numeric column, and no date column
+    if date_col_found or len(string_cols) < 2 or len(numeric_cols) < 1:
+        return None
+
+    value_col = numeric_cols[0]
+
+    # Find the best (category, group) pair: the combination that best covers
+    # the rows (category × group ≈ total rows) and forms a grid structure.
+    best_pair = None
+    best_score = -1
+
+    for i, col_a in enumerate(string_cols):
+        n_a = df[col_a].nunique()
+        if n_a < 2 or n_a > len(df) * 0.6:
+            continue
+        for col_b in string_cols[i + 1:]:
+            n_b = df[col_b].nunique()
+            if n_b < 2 or n_b > len(df) * 0.6:
+                continue
+            # Check if the combination covers most rows
+            combo_count = df.groupby([col_a, col_b]).size().shape[0]
+            expected = n_a * n_b
+            coverage = combo_count / max(len(df), 1)
+            grid_fit = combo_count / max(expected, 1)
+            # Score: high coverage + good grid fit + prefer more groups (richer chart)
+            score = coverage * grid_fit * (n_a + n_b)
+            if score > best_score:
+                best_score = score
+                # Category = fewer unique values, group = more unique values
+                if n_a <= n_b:
+                    best_pair = (col_a, col_b)
+                else:
+                    best_pair = (col_b, col_a)
+
+    if best_pair is None or best_score < 0.5:
+        return None
+
+    return {
+        "category_column": best_pair[0],
+        "group_column": best_pair[1],
+        "value_column": value_col,
+    }
+
+
 def _compute_derived_value(
     formula: str,
     operand_values: list[float | None],
@@ -580,6 +675,115 @@ def _build_chart_state_from_df(
     )
 
 
+def _build_categorical_chart_state(
+    *,
+    df: pd.DataFrame,
+    dataset_path: str,
+    title: str,
+    category_column: str,
+    group_column: str,
+    value_column: str,
+) -> ChartState:
+    """Build a chart state for categorical grouped bar chart data.
+
+    The data has a category column (e.g., "Energy", "Food"), a group column
+    (e.g., "12-month", "6-month"), and a value column. The chart groups bars
+    by category with sub-bars for each group.
+    """
+    columns = list(df.columns)
+    categories = df[category_column].unique().tolist()
+    groups = df[group_column].unique().tolist()
+
+    # Clean up category names (remove newlines)
+    clean_categories = [re.sub(r"[\r\n]+", " ", str(c)).strip() for c in categories]
+
+    # Build one series per group (each group gets a color)
+    series: list[SeriesConfig] = []
+    legend_entries: list[LegendEntry] = []
+    for i, group in enumerate(groups):
+        color = FRBSF_COLORS[i % len(FRBSF_COLORS)]
+        group_name = re.sub(r"[\r\n]+", " ", str(group)).strip()
+        series.append(
+            SeriesConfig(
+                name=group_name,
+                column=group_name,
+                chart_type="bar",
+                color=color,
+                line_width=2.0,
+                visible=True,
+            )
+        )
+        legend_entries.append(
+            LegendEntry(label=group_name, color=color, series_name=group_name)
+        )
+
+    # Compute y-axis range
+    numeric_vals = pd.to_numeric(df[value_column], errors="coerce").dropna()
+    y_min_val = float(numeric_vals.min()) if len(numeric_vals) > 0 else 0
+    y_max_val = float(numeric_vals.max()) if len(numeric_vals) > 0 else 100
+    y_range = y_max_val - y_min_val
+    if y_range > 0:
+        y_min_val -= y_range * 0.05
+        y_max_val += y_range * 0.05
+    # If there are negative values, ensure y_min includes them
+    if y_min_val > 0:
+        y_min_val = 0
+
+    title_element = ChartElementState(
+        text=title,
+        font_family=FRBSF_FONT_FAMILY,
+        font_size=FRBSF_TITLE_FONT_SIZE,
+        font_color=FRBSF_TITLE_COLOR,
+        position=Position(x=50, y=10),
+    )
+
+    axes = AxesConfig(
+        x_label=re.sub(r"[\r\n]+", " ", category_column).strip(),
+        y_label=re.sub(r"[\r\n]+", " ", value_column).strip(),
+        x_scale="linear",
+        y_scale="linear",
+        y_min=y_min_val,
+        y_max=y_max_val,
+    )
+
+    legend = LegendConfig(
+        visible=True,
+        position=Position(x=50, y=40),
+        entries=legend_entries,
+    )
+
+    gridlines = GridlineConfig(
+        horizontal_visible=True,
+        vertical_visible=False,
+        style="dashed",
+        color=FRBSF_GRIDLINE_COLOR,
+    )
+
+    elements_positions: dict[str, Position] = {
+        "title": Position(x=50, y=10),
+        "legend": Position(x=50, y=40),
+        "x_axis_label": Position(x=300, y=450),
+        "y_axis_label": Position(x=10, y=250),
+    }
+
+    return ChartState(
+        chart_type="bar",
+        title=title_element,
+        axes=axes,
+        series=series,
+        legend=legend,
+        gridlines=gridlines,
+        annotations=[],
+        data_table=None,
+        elements_positions=elements_positions,
+        dataset_path=dataset_path,
+        dataset_columns=columns,
+        bar_grouping="by_category",
+        category_column=category_column,
+        group_column=group_column,
+    )
+
+
 def _apply_image_spec_to_chart_state(
     chart_state: ChartState,
     spec: ChartSpecification,
@@ -708,7 +912,7 @@ def _apply_image_spec_to_chart_state(
     title = ChartElementState(
         text=title_text,
         font_family=spec.font_styles.title.family,
-        font_size=spec.font_styles.title.size,
+        font_size=spec.font_styles.title.size if spec.font_styles.title.size > 0 else 16,
         font_color=spec.font_styles.title.color,
         position=chart_state.title.position,
     )
@@ -790,4 +994,7 @@ def _apply_image_spec_to_chart_state(
         elements_positions=chart_state.elements_positions,
         dataset_path=chart_state.dataset_path,
         dataset_columns=chart_state.dataset_columns,
+        bar_grouping=chart_state.bar_grouping,
+        category_column=chart_state.category_column,
+        group_column=chart_state.group_column,
     )
