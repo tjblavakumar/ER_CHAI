@@ -148,6 +148,18 @@ const ControlsPanel: React.FC = () => {
             <option value="mixed">Mixed</option>
           </select>
         </Field>
+        {chartState.chart_type === 'bar' && (
+          <Field label="Bar Grouping">
+            <select
+              value={chartState.bar_grouping ?? 'by_series'}
+              onChange={(e) => patch({ bar_grouping: e.target.value })}
+              style={{ width: '100%' }}
+            >
+              <option value="by_series">By Series (default)</option>
+              <option value="by_category">By Category</option>
+            </select>
+          </Field>
+        )}
       </Section>
 
       {/* ---- Axes ---- */}
@@ -313,7 +325,7 @@ const ControlsPanel: React.FC = () => {
       </Section>
 
       {/* ---- Title Font ---- */}
-      <Section title="Title / Fonts">
+      <Section title="Title / Fonts" defaultOpen>
         <Field label="Title Text">
           <input
             type="text"
@@ -384,6 +396,61 @@ const ControlsPanel: React.FC = () => {
             style={{ width: '100%' }}
           />
         </Field>
+        {legend.entries.map((entry, idx) => (
+          <div key={entry.series_name} style={{ marginBottom: 8, padding: 6, background: '#f5f5f5', borderRadius: 4 }}>
+            <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, color: entry.color }}>{entry.label}</div>
+            <Field label="Label">
+              <input
+                type="text"
+                value={entry.label}
+                onChange={(e) => {
+                  const updated = legend.entries.map((en, i) => i === idx ? { ...en, label: e.target.value } : en);
+                  patchLegend({ entries: updated });
+                }}
+                style={{ width: '100%' }}
+              />
+            </Field>
+            <Field label="Font Size">
+              <input
+                type="number"
+                min={6}
+                max={36}
+                value={entry.font_size ?? 11}
+                onChange={(e) => {
+                  const updated = legend.entries.map((en, i) => i === idx ? { ...en, font_size: Number(e.target.value) } : en);
+                  patchLegend({ entries: updated });
+                }}
+                style={{ width: '100%' }}
+              />
+            </Field>
+            <Field label="Font Color">
+              <input
+                type="color"
+                value={entry.font_color ?? '#333333'}
+                onChange={(e) => {
+                  const updated = legend.entries.map((en, i) => i === idx ? { ...en, font_color: e.target.value } : en);
+                  patchLegend({ entries: updated });
+                }}
+              />
+            </Field>
+            <Field label="Font Family">
+              <select
+                value={entry.font_family ?? 'Arial'}
+                onChange={(e) => {
+                  const updated = legend.entries.map((en, i) => i === idx ? { ...en, font_family: e.target.value } : en);
+                  patchLegend({ entries: updated });
+                }}
+                style={{ width: '100%' }}
+              >
+                <option value="Arial">Arial</option>
+                <option value="Helvetica">Helvetica</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Courier New">Courier New</option>
+              </select>
+            </Field>
+          </div>
+        ))}
       </Section>
 
       {/* ---- Gridlines ---- */}
@@ -672,6 +739,24 @@ const ControlsPanel: React.FC = () => {
           </div>
         ))}
         {annotations.length === 0 && <p style={{ color: '#999' }}>No annotations.</p>}
+        {annotations.length > 0 && (
+          <button
+            onClick={() => patch({ annotations: [] })}
+            style={{
+              width: '100%',
+              fontSize: 11,
+              padding: '4px 0',
+              marginBottom: 6,
+              color: '#c00',
+              background: '#fff0f0',
+              border: '1px solid #fcc',
+              borderRadius: 3,
+              cursor: 'pointer',
+            }}
+          >
+            🗑 Delete All Annotations
+          </button>
+        )}
         <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
           <button
             style={{ flex: 1, fontSize: 11, padding: '3px 0' }}

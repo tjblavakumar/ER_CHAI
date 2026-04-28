@@ -172,7 +172,7 @@ class AIAssistantHandler:
             f"User request: {message}\n\n"
             "Return a JSON object with only the fields that should change. "
             "Valid top-level fields are: chart_type, title, axes, series, "
-            "legend, gridlines, annotations, data_table.\n"
+            "legend, gridlines, annotations, data_table, bar_grouping.\n"
             "Omit any field that should not change.\n\n"
             "AXES FORMAT: The axes object supports these styling fields:\n"
             "- 'y_format': controls Y-axis tick display. Values: "
@@ -209,12 +209,63 @@ class AIAssistantHandler:
             "You can remove multiple annotations at once by including multiple objects with _delete.\n\n"
             "CHART TYPE: When changing chart_type to 'area', set chart_type at the top level. "
             "The system will automatically propagate it to all series.\n\n"
+            "BAR GROUPING: For bar charts, the 'bar_grouping' field controls how bars are arranged:\n"
+            "- 'by_series' (default): bars grouped by x-axis position, series side by side\n"
+            "- 'by_category': bars grouped by category (e.g., all Energy bars together, "
+            "all Food bars together). Use this when the user asks to group bars by category, "
+            "put similar items together, or cluster bars.\n"
+            'Example: {"bar_grouping": "by_category"} groups bars by category\n'
+            'Example: {"bar_grouping": "by_series"} returns to default grouping\n\n'
+            "DATA TABLE: The 'data_table' field controls the data table shown on the chart.\n"
+            "Fields: visible (bool), columns (list of column names to show), "
+            "max_rows (number of date columns), font_size (6-24).\n"
+            "- To hide: {\"data_table\": {\"visible\": false, ...copy other fields}}\n"
+            "- To show: {\"data_table\": {\"visible\": true, ...copy other fields}}\n"
+            "- To change columns shown: set 'columns' to the desired list of column names\n"
+            "- To change max date columns: set 'max_rows'\n"
+            "CUSTOM TABLE: For fully custom tables, use 'custom_headers' and 'custom_rows':\n"
+            "- custom_headers: list of column header strings, e.g., [\"Series\", \"in $\", \"in %\"]\n"
+            "- custom_rows: list of row objects, e.g., [{\"Series\": \"Energy\", \"in $\": \"4.1\", \"in %\": \"4.1%\"}]\n"
+            "When the user asks for a custom table layout, use custom_headers and custom_rows. "
+            "Look at the actual data in the current chart state to fill in real values.\n"
+            'Example: {"data_table": {"visible": true, "custom_headers": ["Series", "Value", "Change"], '
+            '"custom_rows": [{"Series": "GDP", "Value": "21.5T", "Change": "+2.1%"}]}}\n'
+            "IMPORTANT: When modifying data_table, include ALL required fields: "
+            "visible, position (with x and y), columns, font_size, max_rows. "
+            "Copy unchanged fields from the current chart state's data_table.\n"
+            "The user may ask to customize what's shown in the data table — "
+            "adjust columns, max_rows, font_size, or visibility accordingly.\n\n"
             "IMPORTANT: If you include 'series' in the delta, each series object "
             "MUST include ALL required fields: name, column, chart_type, color, "
             "line_width, visible. Copy unchanged fields from the current chart state.\n\n"
+            "DISPLAY TRANSFORMS: The 'display_transforms' field allows non-destructive "
+            "value transformations on data columns. Each transform has:\n"
+            "- column: the column name to transform\n"
+            "- operation: 'multiply', 'divide', 'add', 'subtract', 'normalize'\n"
+            "- factor: the numeric factor (for multiply/divide/add/subtract)\n"
+            "- base_value: for normalize, the base value to divide by (result * 100)\n"
+            "- suffix: display suffix (e.g., 'M' for millions, '%')\n"
+            "- label: human-readable description\n"
+            "Examples:\n"
+            '- Billions to millions: {"display_transforms": [{"column": "value", '
+            '"operation": "divide", "factor": 1000, "suffix": "M", '
+            '"label": "Billions to Millions"}]}\n'
+            '- Show as percentage (multiply by 100): {"display_transforms": [{"column": "value", '
+            '"operation": "multiply", "factor": 100, "suffix": "%", '
+            '"label": "Convert to percentage"}]}\n'
+            '- Clear transforms (show original): {"display_transforms": []}\n'
+            "The original data is never modified — transforms are applied on-the-fly.\n"
+            "Use this when the user asks to convert units, show as percentage, etc.\n\n"
             "IMPORTANT: If you include 'legend' in the delta, it MUST include ALL "
             "required fields: visible, position (with x and y), entries. "
-            "Copy unchanged fields from the current chart state.\n\n"
+            "Copy unchanged fields from the current chart state.\n"
+            "Each legend entry has: label, color, series_name, font_size, font_color, font_family.\n"
+            "When the user asks to change ALL text sizes or ALL font properties, "
+            "you MUST also update legend entries' font_size/font_color/font_family "
+            "in addition to title, axes tick/label font sizes, and annotation font sizes.\n\n"
+            "IMPORTANT: For text/font changes, do NOT include 'series' in the delta — "
+            "series controls data rendering, not text display. Only include 'series' "
+            "when the user explicitly asks to change series properties (color, chart_type, visibility).\n\n"
             "Return ONLY valid JSON, no markdown fences or explanation."
         )
 
@@ -400,15 +451,63 @@ class AIAssistantHandler:
             existing_axes = current_chart_state.axes.model_dump()
             data["axes"] = {**existing_axes, **data["axes"]}
 
+        # Merge partial title with current chart state
+        if "title" in data and isinstance(data["title"], dict) and current_chart_state:
+            existing_title = current_chart_state.title.model_dump()
+            merged_title = {**existing_title, **data["title"]}
+            # Ensure nested position is merged properly
+            if "position" not in data["title"] and "position" in existing_title:
+                merged_title["position"] = existing_title["position"]
+            data["title"] = merged_title
+
         # Merge partial data_table with current chart state
         if "data_table" in data and isinstance(data["data_table"], dict) and current_chart_state:
+            dt = data["data_table"]
+
+            # Detect if the AI tried to create a custom table layout
+            # (computed_columns as plain strings, computed_values as dicts)
+            has_custom_layout = False
+            if "computed_columns" in dt and isinstance(dt["computed_columns"], list):
+                if dt["computed_columns"] and isinstance(dt["computed_columns"][0], str):
+                    # AI sent column names as strings — convert to custom table
+                    has_custom_layout = True
+            if "computed_values" in dt and isinstance(dt["computed_values"], dict):
+                first_val = next(iter(dt["computed_values"].values()), None)
+                if isinstance(first_val, dict):
+                    has_custom_layout = True
+
+            if has_custom_layout:
+                # Convert AI's creative output to custom_headers + custom_rows
+                headers = dt.get("computed_columns", [])
+                if isinstance(headers, list) and headers and isinstance(headers[0], str):
+                    dt["custom_headers"] = headers
+                else:
+                    dt["custom_headers"] = []
+                dt["computed_columns"] = []
+
+                rows_data = dt.get("computed_values", {})
+                custom_rows = []
+                if isinstance(rows_data, dict):
+                    for key, val in rows_data.items():
+                        if isinstance(val, dict):
+                            custom_rows.append({k: str(v) for k, v in val.items()})
+                        else:
+                            custom_rows.append({"value": str(val)})
+                dt["custom_rows"] = custom_rows
+                dt["computed_values"] = {}
+
             existing_dt = (current_chart_state.data_table.model_dump()
                            if current_chart_state.data_table else {
                                "visible": False, "position": {"x": 70, "y": 490},
                                "columns": current_chart_state.dataset_columns,
                                "font_size": 10, "max_rows": 5,
                            })
-            data["data_table"] = {**existing_dt, **data["data_table"]}
+            data["data_table"] = {**existing_dt, **dt}
+
+        # Merge partial gridlines with current chart state
+        if "gridlines" in data and isinstance(data["gridlines"], dict) and current_chart_state:
+            existing_gridlines = current_chart_state.gridlines.model_dump()
+            data["gridlines"] = {**existing_gridlines, **data["gridlines"]}
 
         # Merge partial legend with current chart state
         if "legend" in data and isinstance(data["legend"], dict) and current_chart_state:

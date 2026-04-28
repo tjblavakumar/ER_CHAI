@@ -382,8 +382,10 @@ async def reanalyze(
     """Re-analyze reference image and regenerate chart from existing dataset."""
     import os
     from backend.services.ingestion import (
+        _detect_categorical_data,
         _detect_and_pivot_long_format,
         _build_chart_state_from_df,
+        _build_categorical_chart_state,
         _apply_image_spec_to_chart_state,
     )
 
@@ -397,10 +399,25 @@ async def reanalyze(
         )
 
     df = pd.read_csv(dataset_path)
-    df = _detect_and_pivot_long_format(df)
+
+    # Check for categorical data first
+    categorical_info = _detect_categorical_data(df)
+    if categorical_info is None:
+        df = _detect_and_pivot_long_format(df)
 
     title = os.path.splitext(os.path.basename(dataset_path))[0]
-    chart_state = _build_chart_state_from_df(df=df, dataset_path=dataset_path, title=title)
+
+    if categorical_info is not None:
+        chart_state = _build_categorical_chart_state(
+            df=df,
+            dataset_path=dataset_path,
+            title=title,
+            category_column=categorical_info["category_column"],
+            group_column=categorical_info["group_column"],
+            value_column=categorical_info["value_column"],
+        )
+    else:
+        chart_state = _build_chart_state_from_df(df=df, dataset_path=dataset_path, title=title)
 
     image_bytes = await reference_image.read()
     spec, vision_result = await _ingestion_service._image_analyzer.analyze(image_bytes)

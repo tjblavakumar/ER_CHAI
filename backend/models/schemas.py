@@ -243,10 +243,23 @@ class DataTableConfig(BaseModel):
     series_col_width: float = 120.0  # width of the series name column
     computed_columns: list[ComputedColumnDefinition] = []
     computed_values: dict[str, float | None] = {}
+    # Custom table mode: arbitrary rows with named columns
+    custom_headers: list[str] = []  # e.g., ["Series", "in $", "in %"]
+    custom_rows: list[dict[str, str]] = []  # e.g., [{"Series": "Energy", "in $": "4.1", "in %": "4.1%"}]
+
+
+class DisplayTransform(BaseModel):
+    """A non-destructive display transformation applied to a data column."""
+    column: str  # column to transform
+    operation: str  # "multiply", "divide", "add", "subtract", "percent_change", "normalize"
+    factor: float = 1.0  # factor for multiply/divide/add/subtract
+    base_value: float | None = None  # for normalize: the base value to divide by
+    suffix: str = ""  # display suffix (e.g., "M", "%")
+    label: str = ""  # human-readable description (e.g., "Billions → Millions")
 
 
 class ChartState(BaseModel):
-    chart_type: str  # "line", "bar", "mixed"
+    chart_type: str  # "line", "bar", "area", "mixed"
     title: ChartElementState
     axes: AxesConfig
     series: list[SeriesConfig]
@@ -257,6 +270,12 @@ class ChartState(BaseModel):
     elements_positions: dict[str, Position]  # element_id -> {x, y}
     dataset_path: str
     dataset_columns: list[str]
+    # Categorical bar chart support
+    bar_grouping: str = "by_series"  # "by_series" | "by_category"
+    category_column: str | None = None  # column used for x-axis categories
+    group_column: str | None = None  # column used for sub-groups within each category
+    # Display transforms (non-destructive value transformations)
+    display_transforms: list[DisplayTransform] = []
 
 
 # --- AI ---
@@ -279,6 +298,8 @@ class ChartConfigDelta(BaseModel):
     gridlines: GridlineConfig | None = None
     annotations: list[AnnotationConfig] | None = None
     data_table: DataTableConfig | None = None
+    bar_grouping: str | None = None
+    display_transforms: list[DisplayTransform] | None = None
 
 
 class AIResponse(BaseModel):
