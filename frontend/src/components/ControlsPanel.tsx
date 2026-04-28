@@ -162,6 +162,32 @@ const ControlsPanel: React.FC = () => {
         )}
       </Section>
 
+      {/* ---- Canvas Size ---- */}
+      <Section title="Canvas Size">
+        <Field label="Width">
+          <input
+            type="number"
+            min={800}
+            max={2400}
+            step={50}
+            value={useAppStore.getState().canvasWidth}
+            onChange={(e) => useAppStore.getState().setCanvasSize(Number(e.target.value), useAppStore.getState().canvasHeight)}
+            style={{ width: '100%' }}
+          />
+        </Field>
+        <Field label="Height">
+          <input
+            type="number"
+            min={400}
+            max={1600}
+            step={50}
+            value={useAppStore.getState().canvasHeight}
+            onChange={(e) => useAppStore.getState().setCanvasSize(useAppStore.getState().canvasWidth, Number(e.target.value))}
+            style={{ width: '100%' }}
+          />
+        </Field>
+      </Section>
+
       {/* ---- Axes ---- */}
       <Section title="Axes" defaultOpen>
         <Field label="X Label">
