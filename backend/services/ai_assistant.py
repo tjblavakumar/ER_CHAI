@@ -74,9 +74,36 @@ class AIAssistantHandler:
         intent = await self._classify_intent(message)
 
         if intent == "chart_modify":
+            # Detect structural/direct actions that should bypass advisory mode
+            msg_lower = message.lower()
+            _DIRECT_ACTION_KEYWORDS = [
+                "delete", "remove", "hide", "show", "toggle",
+                "change to line", "change to bar", "change to area",
+                "switch to line", "switch to bar", "switch to area",
+                "make it a line", "make it a bar", "make it an area",
+                "stacked", "grouped", "undo", "reset",
+                "add annotation", "add h-line", "add v-line", "add v-band",
+                "add horizontal", "add vertical",
+            ]
+            is_direct_action = any(kw in msg_lower for kw in _DIRECT_ACTION_KEYWORDS)
+
+            if is_direct_action:
+                # Apply directly without suggestions
+                delta = await self._handle_chart_modify(session_id, message, chart_context)
+                self._sessions[session_id].append({"role": "user", "content": message})
+                self._sessions[session_id].append({
+                    "role": "assistant",
+                    "content": f"Applied: {delta.model_dump_json(exclude_none=True)}",
+                })
+                return AIResponse(
+                    type="chart_modify",
+                    message="Done! I've applied the change.",
+                    chart_delta=delta,
+                )
+
+            # Styling changes — generate suggestions
             suggestions = await self._generate_suggestions(session_id, message, chart_context)
             self._sessions[session_id].append({"role": "user", "content": message})
-            # Always return as suggestions for user to choose
             suggestion_dicts = [
                 {"label": s["label"], "delta": s["delta"].model_dump(exclude_none=True)}
                 for s in suggestions
@@ -196,7 +223,7 @@ class AIAssistantHandler:
             ']}\n\n'
             "Each delta follows the chart modification format. "
             "Valid fields: chart_type, title, axes, series, legend, gridlines, "
-            "annotations, data_table, bar_grouping, display_transforms.\n\n"
+            "annotations, data_table, bar_grouping, bar_stacking, display_transforms.\n\n"
             "IMPORTANT: If you include 'series' in a delta, each series MUST have ALL fields: "
             "name, column, chart_type, color, line_width, visible. Copy from current state.\n"
             "If you include 'legend', it MUST have ALL fields: visible, position, entries.\n\n"
@@ -329,6 +356,10 @@ class AIAssistantHandler:
             "put similar items together, or cluster bars.\n"
             'Example: {"bar_grouping": "by_category"} groups bars by category\n'
             'Example: {"bar_grouping": "by_series"} returns to default grouping\n\n'
+            "BAR STACKING: The 'bar_stacking' field controls whether bars are grouped or stacked:\n"
+            "- 'grouped' (default): bars side by side\n"
+            "- 'stacked': bars stacked on top of each other (shows composition and total)\n"
+            'Example: {"bar_stacking": "stacked"} stacks bars\n\n'
             "DATA TABLE: The 'data_table' field controls the data table shown on the chart.\n"
             "Fields: visible (bool), columns (list of column names to show), "
             "max_rows (number of date columns), font_size (6-24).\n"
