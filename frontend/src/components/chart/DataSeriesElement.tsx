@@ -12,6 +12,7 @@ interface DataSeriesElementProps {
   categoryColumn?: string | null;
   groupColumn?: string | null;
   barLabelFontSize?: number;
+  barStacking?: string;  // "grouped" | "stacked"
 }
 
 /**
@@ -210,6 +211,7 @@ const DataSeriesElement: React.FC<DataSeriesElementProps> = ({
   categoryColumn,
   groupColumn,
   barLabelFontSize,
+  barStacking,
 }) => {
   const { x, y, width, height } = chartArea;
   const yRange = yMax - yMin || 1;
@@ -236,6 +238,79 @@ const DataSeriesElement: React.FC<DataSeriesElementProps> = ({
     );
   }
 
+  // Stacked bar rendering
+  if (barStacking === 'stacked' && datasetRows && datasetRows.length > 0) {
+    const visibleBarSeries = series.filter((s) => s.visible && s.chart_type === 'bar');
+    if (visibleBarSeries.length > 0) {
+      const dataCount = datasetRows.length;
+      const barPadding = width * 0.02;
+      const usableWidth = width - barPadding * 2;
+      const barWidth = (usableWidth / Math.max(dataCount, 1)) * 0.7;
+
+      // Pre-compute stack totals for each data point (for line overlay)
+      const stackTotals: number[] = [];
+      for (let di = 0; di < dataCount; di++) {
+        let total = 0;
+        for (const s of visibleBarSeries) {
+          const val = Number(datasetRows[di]?.[s.column]);
+          if (!isNaN(val)) total += val;
+        }
+        stackTotals.push(total);
+      }
+
+      return (
+        <Group>
+          {Array.from({ length: dataCount }, (_, di) => {
+            let stackY = y + height;
+            return (
+              <Group key={`stack-${di}`}>
+                {visibleBarSeries.map((s) => {
+                  const val = Number(datasetRows[di]?.[s.column]);
+                  if (isNaN(val) || val === 0) return null;
+                  const barH = (Math.abs(val) / (yMax - yMin || 1)) * height;
+                  stackY -= barH;
+                  const bx = x + barPadding + (di / Math.max(dataCount - 1, 1)) * usableWidth - barWidth / 2;
+                  return (
+                    <Rect
+                      key={`${s.name}-${di}`}
+                      x={bx}
+                      y={stackY}
+                      width={barWidth}
+                      height={Math.max(barH, 0.5)}
+                      fill={s.color}
+                      opacity={0.85}
+                    />
+                  );
+                })}
+              </Group>
+            );
+          })}
+          {/* Render non-bar series (lines) at the stack total position */}
+          {series.filter((s) => s.visible && s.chart_type !== 'bar').map((s) => {
+            const points: number[] = [];
+            for (let di = 0; di < dataCount; di++) {
+              const px = x + barPadding + (di / Math.max(dataCount - 1, 1)) * usableWidth;
+              // Use stack total as the y value so line sits on top of stacked bars
+              const totalVal = stackTotals[di];
+              const py = y + height - ((totalVal - yMin) / (yMax - yMin || 1)) * height;
+              points.push(px, py);
+            }
+            return (
+              <Line
+                key={s.name}
+                points={points}
+                stroke={s.color}
+                strokeWidth={s.line_width}
+                lineCap="round"
+                lineJoin="round"
+              />
+            );
+          })}
+        </Group>
+      );
+    }
+  }
+
   // Standard rendering (by_series / default)
   const visibleSeries = series.filter((s) => s.visible);
   const barSeriesCount = visibleSeries.filter((s) => s.chart_type === 'bar').length;
@@ -257,7 +332,9 @@ const DataSeriesElement: React.FC<DataSeriesElementProps> = ({
 
         if (s.chart_type === 'bar') {
           const currentBarIndex = barGroupIndex++;
-          const totalBarWidth = width / Math.max(dataCount, 1);
+          const barPadding = width * 0.02;
+          const usableWidth = width - barPadding * 2;
+          const totalBarWidth = usableWidth / Math.max(dataCount, 1);
           const singleBarWidth = (totalBarWidth * 0.7) / Math.max(barSeriesCount, 1);
           const barOffset =
             currentBarIndex * singleBarWidth -
@@ -268,8 +345,8 @@ const DataSeriesElement: React.FC<DataSeriesElementProps> = ({
             <Group key={s.name}>
               {validData.map((d) => {
                 const bx =
-                  x +
-                  (d.index / Math.max(dataCount - 1, 1)) * width +
+                  x + barPadding +
+                  (d.index / Math.max(dataCount - 1, 1)) * usableWidth +
                   barOffset -
                   singleBarWidth / 2;
                 const barHeight = ((d.value - yMin) / yRange) * height;

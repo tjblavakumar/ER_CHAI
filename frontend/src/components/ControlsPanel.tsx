@@ -160,6 +160,18 @@ const ControlsPanel: React.FC = () => {
             </select>
           </Field>
         )}
+        {chartState.chart_type === 'bar' && (
+          <Field label="Bar Stacking">
+            <select
+              value={chartState.bar_stacking ?? 'grouped'}
+              onChange={(e) => patch({ bar_stacking: e.target.value })}
+              style={{ width: '100%' }}
+            >
+              <option value="grouped">Grouped (side by side)</option>
+              <option value="stacked">Stacked</option>
+            </select>
+          </Field>
+        )}
       </Section>
 
       {/* ---- Canvas Size ---- */}

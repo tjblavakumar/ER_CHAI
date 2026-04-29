@@ -90,5 +90,33 @@ export function generateChartVariants(
     chartState: barState,
   });
 
+  // Stacked bar variant (only if multiple series)
+  if (baseState.series.length > 1) {
+    const stackedState = deepClone(baseState);
+    stackedState.chart_type = 'bar';
+    stackedState.bar_stacking = 'stacked';
+    stackedState.series = stackedState.series.map((s) => ({ ...s, chart_type: 'bar' }));
+    variants.push({
+      label: 'Stacked Bar',
+      description: 'Stacked bar chart — shows composition and total',
+      chartState: stackedState,
+    });
+
+    // Stacked bar + line variant (last series as line overlay)
+    const mixedState = deepClone(baseState);
+    mixedState.chart_type = 'mixed';
+    mixedState.bar_stacking = 'stacked';
+    mixedState.series = mixedState.series.map((s, i) =>
+      i === mixedState.series.length - 1
+        ? { ...s, chart_type: 'line', line_width: 2.5 }
+        : { ...s, chart_type: 'bar' },
+    );
+    variants.push({
+      label: 'Stacked Bar + Line',
+      description: 'Stacked bars with a summary line on top',
+      chartState: mixedState,
+    });
+  }
+
   return variants;
 }

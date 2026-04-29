@@ -659,7 +659,7 @@ const App: React.FC = () => {
           >
             <h1 style={{ fontSize: 18, margin: 0, display: 'flex', alignItems: 'baseline', gap: 8 }}>
               CHAI : Chart AI Assistant
-              <span style={{ fontSize: 11, fontWeight: 400, color: '#888', fontStyle: 'italic' }}>v3</span>
+              <span style={{ fontSize: 11, fontWeight: 400, color: '#888', fontStyle: 'italic' }}>v3.1</span>
             </h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

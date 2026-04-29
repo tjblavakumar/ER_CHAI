@@ -274,6 +274,7 @@ class ChartState(BaseModel):
     bar_grouping: str = "by_series"  # "by_series" | "by_category"
     category_column: str | None = None  # column used for x-axis categories
     group_column: str | None = None  # column used for sub-groups within each category
+    bar_stacking: str = "grouped"  # "grouped" | "stacked"
     # Display transforms (non-destructive value transformations)
     display_transforms: list[DisplayTransform] = []
 
@@ -299,6 +300,7 @@ class ChartConfigDelta(BaseModel):
     annotations: list[AnnotationConfig] | None = None
     data_table: DataTableConfig | None = None
     bar_grouping: str | None = None
+    bar_stacking: str | None = None
     display_transforms: list[DisplayTransform] | None = None
 
 

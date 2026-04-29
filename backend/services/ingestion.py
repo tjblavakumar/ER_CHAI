@@ -410,42 +410,63 @@ def _detect_and_pivot_long_format(df: pd.DataFrame) -> pd.DataFrame:
     if len(cols) < 3:
         return df
 
-    # Find date column, key column, and value column
-    date_col = None
-    key_col = None
-    value_col = None
+    # Find ALL date columns, key column candidates, and value column candidates
+    date_cols = []
+    key_candidates = []
+    value_candidates = []
 
     for col in cols:
-        if date_col is None:
+        # Check if it's a date column (only string columns can be dates)
+        if pd.api.types.is_object_dtype(df[col]) or pd.api.types.is_string_dtype(df[col]):
             try:
                 parsed = pd.to_datetime(df[col], errors="coerce", format="mixed")
                 if parsed.notna().sum() > len(df) * 0.5:
-                    date_col = col
+                    date_cols.append(col)
                     continue
             except Exception:
                 pass
-
-        if value_col is None and pd.api.types.is_numeric_dtype(df[col]):
-            value_col = col
-            continue
-
-        if key_col is None and (pd.api.types.is_object_dtype(df[col]) or pd.api.types.is_string_dtype(df[col])):
+            # Not a date — check if it's a key candidate
             nunique = df[col].nunique()
-            # Key column should have few unique values relative to row count
             if 1 < nunique <= len(df) * 0.5:
-                key_col = col
-                continue
+                key_candidates.append((col, nunique))
+        elif pd.api.types.is_numeric_dtype(df[col]):
+            value_candidates.append(col)
 
-    if date_col is None or key_col is None or value_col is None:
+    if not date_cols or not key_candidates or not value_candidates:
         return df
+
+    # Prefer the actual date column: columns named "date" over others
+    date_col = date_cols[0]
+    for dc in date_cols:
+        if dc.lower() in ("date", "dates", "observation_date"):
+            date_col = dc
+            break
+
+    # Prefer value columns named "value", "values", "amount", "count"
+    _PREFERRED_VALUE_NAMES = {"value", "values", "amount", "count", "rate", "pct"}
+    value_col = value_candidates[0]
+    for vc in value_candidates:
+        if vc.lower() in _PREFERRED_VALUE_NAMES:
+            value_col = vc
+            break
+
+    # Prefer key columns named "variable", "key", "series", etc.
+    _PREFERRED_KEY_NAMES = {"variable", "key", "series", "category", "name", "type", "group", "indicator"}
+    key_col = key_candidates[0][0]
+    for kc, _ in key_candidates:
+        if kc.lower() in _PREFERRED_KEY_NAMES:
+            key_col = kc
+            break
+    if key_col == key_candidates[0][0] and len(key_candidates) > 1:
+        key_candidates.sort(key=lambda x: x[1])
+        key_col = key_candidates[0][0]
 
     # Pivot: date as index, key values become columns, values fill the cells
     try:
         pivoted = df.pivot_table(
             index=date_col, columns=key_col, values=value_col, aggfunc="first"
         ).reset_index()
-        pivoted.columns.name = None  # remove the multi-index name
-        # Sort by date
+        pivoted.columns.name = None
         pivoted = pivoted.sort_values(date_col).reset_index(drop=True)
         return pivoted
     except Exception:
@@ -823,13 +844,31 @@ def _apply_image_spec_to_chart_state(
     y_format = vision_result.y_format if vision_result else "auto"
     axis_lw = vision_result.axis_line_width if vision_result else 1.0
     tick_fs = vision_result.tick_font_size if vision_result else 10
+
+    # Y-axis range: use Vision AI values only if compatible with actual data
+    # Vision AI often misreads scale (e.g., returns 0.12 when data has 12.0)
+    vision_y_min = spec.axis_config.y_min
+    vision_y_max = spec.axis_config.y_max
+    data_y_min = chart_state.axes.y_min
+    data_y_max = chart_state.axes.y_max
+    use_y_min = data_y_min
+    use_y_max = data_y_max
+    if (vision_y_min is not None and vision_y_max is not None
+            and data_y_min is not None and data_y_max is not None):
+        data_range = abs(data_y_max - data_y_min) or 1
+        vision_range = abs(vision_y_max - vision_y_min) or 1
+        # If ranges differ by more than 10x, Vision AI likely misread the scale
+        if 0.1 <= vision_range / data_range <= 10:
+            use_y_min = vision_y_min
+            use_y_max = vision_y_max
+
     axes = AxesConfig(
         x_label=spec.axis_config.x_label or chart_state.axes.x_label,
         y_label=spec.axis_config.y_label or chart_state.axes.y_label,
         x_min=spec.axis_config.x_min if spec.axis_config.x_min is not None else chart_state.axes.x_min,
         x_max=spec.axis_config.x_max if spec.axis_config.x_max is not None else chart_state.axes.x_max,
-        y_min=spec.axis_config.y_min if spec.axis_config.y_min is not None else chart_state.axes.y_min,
-        y_max=spec.axis_config.y_max if spec.axis_config.y_max is not None else chart_state.axes.y_max,
+        y_min=use_y_min,
+        y_max=use_y_max,
         x_scale=chart_state.axes.x_scale,
         y_scale=chart_state.axes.y_scale,
         y_format=y_format,

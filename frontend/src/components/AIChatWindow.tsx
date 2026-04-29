@@ -63,6 +63,7 @@ function applyDelta(state: ChartState, delta: ChartConfigDelta): ChartState {
     annotations: mergedAnnotations,
     ...(delta.data_table != null && { data_table: delta.data_table }),
     ...(delta.bar_grouping != null && { bar_grouping: delta.bar_grouping }),
+    ...(delta.bar_stacking != null && { bar_stacking: delta.bar_stacking }),
     ...(delta.display_transforms != null && { display_transforms: delta.display_transforms }),
   };
 }

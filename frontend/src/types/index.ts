@@ -122,8 +122,9 @@ export interface ChartState {
   dataset_columns: string[];
   // Categorical bar chart support
   bar_grouping?: string;       // "by_series" | "by_category"
-  category_column?: string | null;  // column for x-axis categories
-  group_column?: string | null;     // column for sub-groups within each category
+  category_column?: string | null;
+  group_column?: string | null;
+  bar_stacking?: string;       // "grouped" | "stacked"
   // Display transforms
   display_transforms?: DisplayTransform[];
 }
@@ -140,6 +141,7 @@ export interface ChartConfigDelta {
   annotations?: AnnotationConfig[] | null;
   data_table?: DataTableConfig | null;
   bar_grouping?: string | null;
+  bar_stacking?: string | null;
   display_transforms?: DisplayTransform[] | null;
 }
 

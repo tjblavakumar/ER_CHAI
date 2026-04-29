@@ -402,6 +402,7 @@ const CanvasEditor: React.FC = () => {
             categoryColumn={chartState.category_column}
             groupColumn={chartState.group_column}
             barLabelFontSize={chartState.axes.tick_font_size ?? 10}
+            barStacking={chartState.bar_stacking}
           />
 
           {/* Axes */}
