@@ -13,6 +13,7 @@ interface DataSeriesElementProps {
   groupColumn?: string | null;
   barLabelFontSize?: number;
   barStacking?: string;  // "grouped" | "stacked"
+  onContextMenu?: (elementId: string, x: number, y: number) => void;
 }
 
 /**
@@ -212,6 +213,7 @@ const DataSeriesElement: React.FC<DataSeriesElementProps> = ({
   groupColumn,
   barLabelFontSize,
   barStacking,
+  onContextMenu,
 }) => {
   const { x, y, width, height } = chartArea;
   const yRange = yMax - yMin || 1;
@@ -311,6 +313,17 @@ const DataSeriesElement: React.FC<DataSeriesElementProps> = ({
     }
   }
 
+  // Helper: trigger context menu for a series on right-click
+  const handleSeriesContextMenu = (seriesName: string, e: any) => {
+    if (!onContextMenu) return;
+    e.evt.preventDefault();
+    const stage = e.target.getStage();
+    const pointerPos = stage?.getPointerPosition();
+    if (pointerPos) {
+      onContextMenu(`series_${seriesName}`, pointerPos.x, pointerPos.y);
+    }
+  };
+
   // Standard rendering (by_series / default)
   const visibleSeries = series.filter((s) => s.visible);
   const barSeriesCount = visibleSeries.filter((s) => s.chart_type === 'bar').length;
@@ -360,6 +373,7 @@ const DataSeriesElement: React.FC<DataSeriesElementProps> = ({
                     height={Math.max(barHeight, 0)}
                     fill={s.color}
                     opacity={0.8}
+                    onContextMenu={(e) => handleSeriesContextMenu(s.name, e)}
                   />
                 );
               })}
@@ -389,6 +403,7 @@ const DataSeriesElement: React.FC<DataSeriesElementProps> = ({
                 fill={s.color}
                 opacity={0.3}
                 closed
+                onContextMenu={(e) => handleSeriesContextMenu(s.name, e)}
               />
               <Line
                 points={points}
@@ -396,20 +411,34 @@ const DataSeriesElement: React.FC<DataSeriesElementProps> = ({
                 strokeWidth={s.line_width}
                 lineCap="round"
                 lineJoin="round"
+                hitStrokeWidth={20}
+                onContextMenu={(e) => handleSeriesContextMenu(s.name, e)}
               />
             </React.Fragment>
           );
         }
 
         return (
-          <Line
-            key={s.name}
-            points={points}
-            stroke={s.color}
-            strokeWidth={s.line_width}
-            lineCap="round"
-            lineJoin="round"
-          />
+          <React.Fragment key={s.name}>
+            {/* Invisible wider hit area for easier right-click targeting on thin lines */}
+            <Line
+              points={points}
+              stroke="transparent"
+              strokeWidth={20}
+              lineCap="round"
+              lineJoin="round"
+              onContextMenu={(e) => handleSeriesContextMenu(s.name, e)}
+            />
+            <Line
+              points={points}
+              stroke={s.color}
+              strokeWidth={s.line_width}
+              lineCap="round"
+              lineJoin="round"
+              hitStrokeWidth={20}
+              onContextMenu={(e) => handleSeriesContextMenu(s.name, e)}
+            />
+          </React.Fragment>
         );
       })}
     </Group>
