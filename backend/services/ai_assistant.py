@@ -245,13 +245,13 @@ class AIAssistantHandler:
         except json.JSONDecodeError:
             # Fallback: treat as a single direct modification
             delta = await self._handle_chart_modify(session_id, message, chart_context)
-            return [{"label": "Apply Change", "delta": delta, "message": "Applied the change."}]
+            return [{"label": "✓ Apply this change", "delta": delta, "message": f'I\'ve prepared a change for: "{message}". Click below to apply it.'}]
 
         suggestions_raw = data.get("suggestions", [])
         if not suggestions_raw or not isinstance(suggestions_raw, list):
             # Fallback
             delta = await self._handle_chart_modify(session_id, message, chart_context)
-            return [{"label": "Apply Change", "delta": delta, "message": "Applied the change."}]
+            return [{"label": "✓ Apply this change", "delta": delta, "message": f'I\'ve prepared a change for: "{message}". Click below to apply it.'}]
 
         results = []
         for s in suggestions_raw:
@@ -275,7 +275,7 @@ class AIAssistantHandler:
         if not results:
             # Fallback
             delta = await self._handle_chart_modify(session_id, message, chart_context)
-            return [{"label": "Apply Change", "delta": delta, "message": "Applied the change."}]
+            return [{"label": "✓ Apply this change", "delta": delta, "message": f'I\'ve prepared a change for: "{message}". Click below to apply it.'}]
 
         # Add a message to the first suggestion
         if results:
@@ -434,16 +434,17 @@ class AIAssistantHandler:
                 history_text += f"{entry['role']}: {entry['content']}\n"
             history_text += "\n"
 
-        sample_text = json.dumps(chart_context.dataset_sample[:5], default=str)
+        sample_text = json.dumps(chart_context.dataset_sample, default=str)
 
         prompt = (
             "You are an AI assistant for an FRBSF chart editing application.\n"
             "The user is asking a question about their economic dataset.\n\n"
             f"{history_text}"
             f"Dataset summary: {chart_context.dataset_summary}\n\n"
-            f"Sample data (first rows):\n{sample_text}\n\n"
+            f"Full dataset ({len(chart_context.dataset_sample)} rows):\n{sample_text}\n\n"
             f"User question: {message}\n\n"
             "Provide a clear, concise answer based on the dataset information. "
+            "You have access to the COMPLETE dataset — analyze all rows to answer accurately. "
             "Use only the provided data and your knowledge. "
             "Do not perform web searches."
         )

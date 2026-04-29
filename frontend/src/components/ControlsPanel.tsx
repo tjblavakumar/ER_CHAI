@@ -87,7 +87,7 @@ const ControlsPanel: React.FC = () => {
   if (!chartState) {
     return (
       <div style={{ padding: 16, color: '#888', fontSize: 13 }}>
-        No chart loaded. Ingest data to begin.
+        No chart loaded. Load data to begin.
       </div>
     );
   }

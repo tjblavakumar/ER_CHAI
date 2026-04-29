@@ -48,9 +48,85 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ onApplyChange }) => {
 
   const currentElement = resolveElement(chartState, contextMenuTarget.elementId);
   const isLegendEntry = contextMenuTarget.elementId.startsWith('legend_entry_');
+  const isSeries = contextMenuTarget.elementId.startsWith('series_');
   const legendEntryLabel = isLegendEntry
     ? resolveLegendLabel(chartState, contextMenuTarget.elementId)
     : null;
+
+  // Series chart type conversion menu
+  if (isSeries) {
+    const seriesName = contextMenuTarget.elementId.replace('series_', '');
+    const seriesConfig = chartState.series.find((s) => s.name === seriesName);
+    const currentType = seriesConfig?.chart_type ?? 'line';
+    const CHART_TYPES: { value: string; label: string; icon: string }[] = [
+      { value: 'line', label: 'Line', icon: '📈' },
+      { value: 'bar', label: 'Bar', icon: '📊' },
+      { value: 'area', label: 'Area', icon: '📉' },
+    ];
+    const otherTypes = CHART_TYPES.filter((t) => t.value !== currentType);
+
+    return (
+      <div
+        ref={menuRef}
+        style={{
+          position: 'absolute',
+          left: contextMenuTarget.x,
+          top: contextMenuTarget.y,
+          background: '#fff',
+          border: '1px solid #ccc',
+          borderRadius: 6,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          padding: 12,
+          zIndex: 1000,
+          minWidth: 180,
+          fontSize: 13,
+          fontFamily: 'Arial, sans-serif',
+        }}
+      >
+        <div style={{ fontWeight: 'bold', marginBottom: 4, color: '#333', fontSize: 13 }}>
+          {seriesName}
+        </div>
+        <div style={{ marginBottom: 8, color: '#888', fontSize: 11 }}>
+          Currently: {currentType.charAt(0).toUpperCase() + currentType.slice(1)}
+        </div>
+        <div style={{ borderTop: '1px solid #eee', paddingTop: 8 }}>
+          <div style={{ color: '#666', fontSize: 11, marginBottom: 6 }}>Convert to</div>
+          {otherTypes.map((t) => (
+            <button
+              key={t.value}
+              onClick={() => onApplyChange(contextMenuTarget.elementId, 'chart_type', t.value)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                width: '100%',
+                padding: '6px 8px',
+                marginBottom: 4,
+                background: '#f8f9fa',
+                border: '1px solid #e0e0e0',
+                borderRadius: 4,
+                cursor: 'pointer',
+                fontSize: 13,
+                color: '#333',
+                textAlign: 'left',
+              }}
+              onMouseEnter={(e) => {
+                (e.target as HTMLButtonElement).style.background = '#e3f2fd';
+                (e.target as HTMLButtonElement).style.borderColor = '#90caf9';
+              }}
+              onMouseLeave={(e) => {
+                (e.target as HTMLButtonElement).style.background = '#f8f9fa';
+                (e.target as HTMLButtonElement).style.borderColor = '#e0e0e0';
+              }}
+            >
+              <span>{t.icon}</span>
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

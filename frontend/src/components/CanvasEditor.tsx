@@ -180,6 +180,14 @@ const CanvasEditor: React.FC = () => {
             a.id === annId ? { ...a, [property]: value } : a,
           );
         }
+      } else if (elementId.startsWith('series_')) {
+        // Per-series chart type conversion
+        const seriesName = elementId.replace('series_', '');
+        if (property === 'chart_type') {
+          updated.series = chartState.series.map((s) =>
+            s.name === seriesName ? { ...s, chart_type: value as string } : s,
+          );
+        }
       } else if (elementId === 'data_table' && chartState.data_table) {
         if (property === '_hide') {
           updated.data_table = { ...chartState.data_table, visible: false };
@@ -403,6 +411,7 @@ const CanvasEditor: React.FC = () => {
             groupColumn={chartState.group_column}
             barLabelFontSize={chartState.axes.tick_font_size ?? 10}
             barStacking={chartState.bar_stacking}
+            onContextMenu={handleContextMenu}
           />
 
           {/* Axes */}

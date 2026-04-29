@@ -1,4 +1,4 @@
-# CHAI : Chart AI Assistant v3.1
+# CHAI : Chart AI Assistant v3.2
 
 An AI-powered web application for creating, customizing, and exporting publication-quality economic charts. Built with FastAPI (Python) backend and React + Konva.js frontend, powered by AWS Bedrock (Claude Sonnet 4.5) for AI-driven chart editing, Vision AI image analysis, and executive summary generation.
 
@@ -21,6 +21,7 @@ An AI-powered web application for creating, customizing, and exporting publicati
 - **Zoomable Canvas**: Zoom in/out/fit buttons + mouse wheel zoom
 - **Drag & Drop**: Move title, legend entries, annotations, data table anywhere on the canvas
 - **Right-click Context Menu**: Change font size, color, family; rename legend labels; delete annotations; hide/delete data table
+- **Per-Series Chart Type Conversion**: Right-click any line, bar, or area series on the chart to convert it to a different chart type — enables mixed charts without touching the controls panel
 - **Chart Types**: Line, bar, area, stacked bar, stacked bar + line, mixed, and categorical grouped bar charts
 - **Bar Stacking**: Grouped (side by side) or stacked rendering, controllable via Controls panel or AI
 - **Bar Grouping**: By series (default) or by category for categorical data
@@ -38,8 +39,9 @@ An AI-powered web application for creating, customizing, and exporting publicati
 - **Right-click Context Menu**: Right-click any annotation on the canvas for quick actions
 
 ### 4. AI Assistant (Claude Sonnet 4.5)
-- **Advisory Mode**: For styling changes (colors, fonts, themes), AI suggests 2-3 professional options as clickable buttons instead of blindly applying. User picks the best option
+- **Advisory Mode**: For styling changes (colors, fonts, themes), AI suggests 2-3 professional options as clickable buttons instead of blindly applying. User picks the best option. Single-option fallbacks show a confirmation prompt ("Click below to apply") instead of auto-applying
 - **Direct Actions**: Structural changes (delete, add, toggle, change chart type) apply immediately without suggestions
+- **Full Dataset Access**: AI receives the complete dataset for accurate analysis, anomaly detection, trend identification, and statistical comparisons
 - **Natural Language Commands**: "Change to area chart", "Add % to y-axis", "Make it a stacked bar chart", "Group bars by category"
 - **Data Q&A**: Ask questions about your data — trends, peaks, comparisons
 - **Summary Updates**: "Append this information to the executive summary"
@@ -47,6 +49,7 @@ An AI-powered web application for creating, customizing, and exporting publicati
 - **Display Transforms**: Non-destructive value transformations — "convert to millions", "show as percentage" — original data stays intact
 - **Annotation Management**: Add, customize, and remove annotations by name
 - **Floating Chat Window**: Bottom-right icon opens the AI chat with undo support
+- **Resizable Chat Window**: Drag the top, left, or top-left corner to resize the AI chat panel (300-900px range). Font size selector in the header (12-18px)
 - **Per-chart Context**: Conversation resets when you create a new chart
 - **Bedrock Status**: Green/red indicator in the header shows connection status
 
@@ -206,11 +209,11 @@ ER_CHAI/
 │   ├── api/client.ts            # Axios API client (15+ endpoints)
 │   ├── components/
 │   │   ├── chart/               # 7 Konva.js chart element components
-│   │   ├── AIChatWindow.tsx     # Floating AI chat with advisory mode, undo, suggestions
+│   │   ├── AIChatWindow.tsx     # Resizable floating AI chat with advisory mode, undo, suggestions, font size control
 │   │   ├── CanvasEditor.tsx     # Zoomable canvas with configurable size
 │   │   ├── ChartPreviewOverlay.tsx  # Chart style selection carousel
 │   │   ├── ControlsPanel.tsx    # Full controls sidebar with all chart options
-│   │   ├── ContextMenu.tsx      # Right-click menu with rename, delete, hide
+│   │   ├── ContextMenu.tsx      # Right-click menu with rename, delete, hide, series chart type conversion
 │   │   ├── ExportToolbar.tsx    # Python/R/PDF download buttons
 │   │   ├── ProjectList.tsx      # Save/load/delete with dataset reload
 │   │   └── SummaryEditor.tsx    # Editable summary with AI generation

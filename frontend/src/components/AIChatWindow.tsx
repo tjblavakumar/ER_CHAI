@@ -7,11 +7,17 @@ import type { ChartContext, ChartState, ChartConfigDelta } from '../types';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function buildChartContext(chartState: ChartState): ChartContext {
+function buildChartContext(
+  chartState: ChartState,
+  datasetRows: Record<string, unknown>[] | null,
+): ChartContext {
+  // Send all rows so the AI has full data access for analysis, anomaly detection, etc.
+  // Typical economic datasets are small (< 1000 rows), well within model context limits.
+  const allRows = datasetRows ?? [];
   return {
     chart_state: chartState,
-    dataset_summary: `Columns: ${chartState.dataset_columns.join(', ')}; Path: ${chartState.dataset_path}`,
-    dataset_sample: [],
+    dataset_summary: `Columns: ${chartState.dataset_columns.join(', ')}; Rows: ${allRows.length}; Path: ${chartState.dataset_path}`,
+    dataset_sample: allRows,
   };
 }
 
@@ -69,6 +75,20 @@ function applyDelta(state: ChartState, delta: ChartConfigDelta): ChartState {
 }
 
 // ---------------------------------------------------------------------------
+// Resize constants
+// ---------------------------------------------------------------------------
+
+const MIN_WIDTH = 300;
+const MIN_HEIGHT = 350;
+const MAX_WIDTH = 900;
+const MAX_HEIGHT = 900;
+const DEFAULT_WIDTH = 420;
+const DEFAULT_HEIGHT = 520;
+const DEFAULT_FONT_SIZE = 14;
+const FONT_SIZE_OPTIONS = [12, 13, 14, 16, 18];
+const EDGE_HANDLE = 6; // px from edge that triggers resize
+
+// ---------------------------------------------------------------------------
 // Styles
 // ---------------------------------------------------------------------------
 
@@ -89,21 +109,6 @@ const fabStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   zIndex: 1000,
-};
-
-const windowStyle: React.CSSProperties = {
-  position: 'fixed',
-  bottom: 88,
-  right: 24,
-  width: 350,
-  height: 450,
-  background: '#fff',
-  borderRadius: 12,
-  boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
-  display: 'flex',
-  flexDirection: 'column',
-  zIndex: 1001,
-  overflow: 'hidden',
 };
 
 const headerStyle: React.CSSProperties = {
@@ -131,15 +136,6 @@ const inputBarStyle: React.CSSProperties = {
   borderTop: '1px solid #e0e0e0',
   padding: 8,
   gap: 6,
-};
-
-const inputStyle: React.CSSProperties = {
-  flex: 1,
-  border: '1px solid #ccc',
-  borderRadius: 6,
-  padding: '6px 10px',
-  fontSize: 13,
-  outline: 'none',
 };
 
 const sendBtnStyle: React.CSSProperties = {
@@ -183,12 +179,20 @@ const AIChatWindow: React.FC = () => {
   const [lastModifyIndex, setLastModifyIndex] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Resizable window state
+  const [winWidth, setWinWidth] = useState(DEFAULT_WIDTH);
+  const [winHeight, setWinHeight] = useState(DEFAULT_HEIGHT);
+  const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE);
+  const resizingRef = useRef<{ edge: string; startX: number; startY: number; startW: number; startH: number } | null>(null);
+  const windowRef = useRef<HTMLDivElement>(null);
+
   const aiChatOpen = useAppStore((s) => s.aiChatOpen);
   const setAiChatOpen = useAppStore((s) => s.setAiChatOpen);
   const chatMessages = useAppStore((s) => s.chatMessages);
   const addChatMessage = useAppStore((s) => s.addChatMessage);
   const chatSessionId = useAppStore((s) => s.chatSessionId);
   const chartState = useAppStore((s) => s.chartState);
+  const datasetRows = useAppStore((s) => s.datasetRows);
   const setChartState = useAppStore((s) => s.setChartState);
   const undo = useAppStore((s) => s.undo);
 
@@ -196,6 +200,50 @@ const AIChatWindow: React.FC = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
+
+  // --- Resize logic ---
+  const handleResizeMouseDown = useCallback((edge: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizingRef.current = {
+      edge,
+      startX: e.clientX,
+      startY: e.clientY,
+      startW: winWidth,
+      startH: winHeight,
+    };
+
+    const handleMouseMove = (ev: MouseEvent) => {
+      if (!resizingRef.current) return;
+      const { edge: ed, startX, startY, startW, startH } = resizingRef.current;
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+
+      let newW = startW;
+      let newH = startH;
+
+      // Left edge or top-left corner: dragging left increases width
+      if (ed.includes('left')) newW = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startW - dx));
+      // Top edge or top-left corner: dragging up increases height
+      if (ed.includes('top')) newH = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, startH - dy));
+
+      setWinWidth(newW);
+      setWinHeight(newH);
+    };
+
+    const handleMouseUp = () => {
+      resizingRef.current = null;
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.body.style.cursor = edge === 'top-left' ? 'nwse-resize' : edge === 'left' ? 'ew-resize' : 'ns-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [winWidth, winHeight]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
@@ -212,7 +260,7 @@ const AIChatWindow: React.FC = () => {
     });
 
     try {
-      const context = buildChartContext(chartState);
+      const context = buildChartContext(chartState, datasetRows);
       const response = await aiChat(chatSessionId, text, context);
 
       if (response.type === 'chart_modify' && response.chart_delta) {
@@ -302,19 +350,102 @@ const AIChatWindow: React.FC = () => {
   return (
     <>
       {fab}
-      <div style={windowStyle} role="dialog" aria-label="AI Assistant Chat">
+      <div
+        ref={windowRef}
+        style={{
+          position: 'fixed',
+          bottom: 88,
+          right: 24,
+          width: winWidth,
+          height: winHeight,
+          background: '#fff',
+          borderRadius: 12,
+          boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
+          display: 'flex',
+          flexDirection: 'column',
+          zIndex: 1001,
+          overflow: 'hidden',
+        }}
+        role="dialog"
+        aria-label="AI Assistant Chat"
+      >
+        {/* Resize handle: top-left corner */}
+        <div
+          onMouseDown={(e) => handleResizeMouseDown('top-left', e)}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: 14,
+            height: 14,
+            cursor: 'nwse-resize',
+            zIndex: 10,
+          }}
+        />
+        {/* Resize handle: left edge */}
+        <div
+          onMouseDown={(e) => handleResizeMouseDown('left', e)}
+          style={{
+            position: 'absolute',
+            top: 14,
+            left: 0,
+            width: EDGE_HANDLE,
+            height: 'calc(100% - 14px)',
+            cursor: 'ew-resize',
+            zIndex: 10,
+          }}
+        />
+        {/* Resize handle: top edge */}
+        <div
+          onMouseDown={(e) => handleResizeMouseDown('top', e)}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 14,
+            width: 'calc(100% - 14px)',
+            height: EDGE_HANDLE,
+            cursor: 'ns-resize',
+            zIndex: 10,
+          }}
+        />
+
         {/* Header */}
         <div style={headerStyle}>
           <span>AI Assistant</span>
-          <button style={closeBtnStyle} onClick={() => setAiChatOpen(false)} aria-label="Close">
-            ✕
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Font size selector */}
+            <select
+              value={fontSize}
+              onChange={(e) => setFontSize(Number(e.target.value))}
+              title="Chat font size"
+              aria-label="Chat font size"
+              style={{
+                background: 'rgba(255,255,255,0.2)',
+                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.4)',
+                borderRadius: 4,
+                padding: '2px 4px',
+                fontSize: 11,
+                cursor: 'pointer',
+                outline: 'none',
+              }}
+            >
+              {FONT_SIZE_OPTIONS.map((s) => (
+                <option key={s} value={s} style={{ color: '#333', background: '#fff' }}>
+                  {s}px
+                </option>
+              ))}
+            </select>
+            <button style={closeBtnStyle} onClick={() => setAiChatOpen(false)} aria-label="Close">
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Messages */}
         <div style={messagesStyle}>
           {chatMessages.length === 0 && (
-            <p style={{ color: '#999', fontSize: 13, textAlign: 'center', marginTop: 40 }}>
+            <p style={{ color: '#999', fontSize, textAlign: 'center', marginTop: 40 }}>
               Ask me to modify your chart or answer data questions.
             </p>
           )}
@@ -330,7 +461,7 @@ const AIChatWindow: React.FC = () => {
                   borderRadius: 10,
                   padding: '8px 12px',
                   maxWidth: '85%',
-                  fontSize: 13,
+                  fontSize,
                   lineHeight: 1.45,
                   wordBreak: 'break-word',
                 }}
@@ -356,7 +487,7 @@ const AIChatWindow: React.FC = () => {
                         }}
                         style={{
                           padding: '6px 12px',
-                          fontSize: 12,
+                          fontSize: fontSize - 1,
                           border: '1px solid #1a73e8',
                           borderRadius: 6,
                           background: '#e8f0fe',
@@ -388,7 +519,14 @@ const AIChatWindow: React.FC = () => {
         {/* Input bar */}
         <div style={inputBarStyle}>
           <input
-            style={inputStyle}
+            style={{
+              flex: 1,
+              border: '1px solid #ccc',
+              borderRadius: 6,
+              padding: '6px 10px',
+              fontSize,
+              outline: 'none',
+            }}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -399,6 +537,7 @@ const AIChatWindow: React.FC = () => {
           <button
             style={{
               ...sendBtnStyle,
+              fontSize: fontSize - 1,
               opacity: !chartState || sending || !input.trim() ? 0.5 : 1,
             }}
             onClick={handleSend}
