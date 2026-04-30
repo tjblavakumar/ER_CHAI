@@ -385,8 +385,10 @@ class AIAssistantHandler:
             "DISPLAY TRANSFORMS: The 'display_transforms' field allows non-destructive "
             "value transformations on data columns. Each transform has:\n"
             "- column: the column name to transform\n"
-            "- operation: 'multiply', 'divide', 'add', 'subtract', 'normalize'\n"
-            "- factor: the numeric factor (for multiply/divide/add/subtract)\n"
+            "- operation: 'multiply', 'divide', 'add', 'subtract', 'normalize', 'percent_change'\n"
+            "- factor: the numeric factor (for multiply/divide/add/subtract), "
+            "or the look-back period for percent_change (e.g. 12 for YoY on monthly data, "
+            "4 for YoY on quarterly data). Defaults to 12.\n"
             "- base_value: for normalize, the base value to divide by (result * 100)\n"
             "- suffix: display suffix (e.g., 'M' for millions, '%')\n"
             "- label: human-readable description\n"
@@ -397,9 +399,21 @@ class AIAssistantHandler:
             '- Show as percentage (multiply by 100): {"display_transforms": [{"column": "value", '
             '"operation": "multiply", "factor": 100, "suffix": "%", '
             '"label": "Convert to percentage"}]}\n'
+            '- Year-over-year percent change (monthly data): {"display_transforms": [{"column": "value", '
+            '"operation": "percent_change", "factor": 12, "suffix": "%", '
+            '"label": "Year-over-Year % Change"}]}\n'
+            '- Year-over-year percent change (quarterly data): {"display_transforms": [{"column": "value", '
+            '"operation": "percent_change", "factor": 4, "suffix": "%", '
+            '"label": "Year-over-Year % Change"}]}\n'
             '- Clear transforms (show original): {"display_transforms": []}\n'
             "The original data is never modified — transforms are applied on-the-fly.\n"
-            "Use this when the user asks to convert units, show as percentage, etc.\n\n"
+            "Use percent_change when the user asks for year-over-year, YoY, period-over-period, "
+            "or growth rate calculations. Set factor to the number of periods in one year "
+            "(12 for monthly, 4 for quarterly, 1 for annual).\n"
+            "IMPORTANT: When using percent_change, also update axes.y_label to reflect "
+            "the new unit (e.g., 'Percent change from year ago') and set axes.y_format "
+            "to 'percent'. Adjust y_min and y_max to fit the expected percentage range "
+            "(typically -5 to 15 for inflation data, but check the data).\n\n"
             "IMPORTANT: If you include 'legend' in the delta, it MUST include ALL "
             "required fields: visible, position (with x and y), entries. "
             "Copy unchanged fields from the current chart state.\n"
@@ -696,6 +710,17 @@ class AIAssistantHandler:
         if "annotations" in data and isinstance(data["annotations"], list):
             _TYPE_MAP = {"line": "horizontal_line", "hline": "horizontal_line", "vband": "vertical_band", "vline": "vertical_line"}
             _SUPPORTED_TYPES = {"text", "vertical_band", "horizontal_line", "vertical_line"}
+
+            def _safe_float(value: Any, default: float = 0.0) -> float:
+                """Convert a value to float, returning *default* for
+                non-numeric strings such as date strings ('1980-06-01')."""
+                if value is None:
+                    return default
+                try:
+                    return float(value)
+                except (ValueError, TypeError):
+                    return default
+
             fixed_annotations: list[dict] = []
             for idx, ann in enumerate(data["annotations"]):
                 if not isinstance(ann, dict):
@@ -723,14 +748,18 @@ class AIAssistantHandler:
                 if "position" not in ann:
                     px = ann.pop("x1", None) or ann.pop("x", 0)
                     py = ann.pop("y1", None) or ann.pop("y", 0)
-                    ann["position"] = {"x": float(px), "y": float(py)}
+                    ann["position"] = {"x": _safe_float(px), "y": _safe_float(py)}
                 elif isinstance(ann["position"], dict):
                     # Ensure both x and y exist in position
                     pos = ann["position"]
                     if "x" not in pos:
-                        pos["x"] = float(ann.pop("x1", None) or ann.pop("x", 0))
+                        pos["x"] = _safe_float(ann.pop("x1", None) or ann.pop("x", 0))
+                    else:
+                        pos["x"] = _safe_float(pos["x"])
                     if "y" not in pos:
-                        pos["y"] = float(ann.pop("y1", None) or ann.pop("y", 0))
+                        pos["y"] = _safe_float(ann.pop("y1", None) or ann.pop("y", 0))
+                    else:
+                        pos["y"] = _safe_float(pos["y"])
                 # Fill in default font properties
                 ann.setdefault("font_size", 10)
                 ann.setdefault("font_color", "#333333")
@@ -749,5 +778,21 @@ class AIAssistantHandler:
                     ann.setdefault("line_width", 1.5)
                 fixed_annotations.append(ann)
             data["annotations"] = fixed_annotations
+
+        # Sanitize display_transforms — the LLM sometimes puts date strings
+        # into numeric fields like base_value or factor.
+        if "display_transforms" in data and isinstance(data["display_transforms"], list):
+            for dt in data["display_transforms"]:
+                if not isinstance(dt, dict):
+                    continue
+                for numeric_field in ("factor", "base_value"):
+                    val = dt.get(numeric_field)
+                    if val is not None:
+                        try:
+                            dt[numeric_field] = float(val)
+                        except (ValueError, TypeError):
+                            # Non-numeric (e.g. a date string) — drop it so
+                            # the Pydantic default kicks in.
+                            dt[numeric_field] = None
 
         return ChartConfigDelta.model_validate(data)
