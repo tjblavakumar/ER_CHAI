@@ -384,36 +384,56 @@ class AIAssistantHandler:
             "line_width, visible. Copy unchanged fields from the current chart state.\n\n"
             "DISPLAY TRANSFORMS: The 'display_transforms' field allows non-destructive "
             "value transformations on data columns. Each transform has:\n"
-            "- column: the column name to transform\n"
-            "- operation: 'multiply', 'divide', 'add', 'subtract', 'normalize', 'percent_change'\n"
+            "- column: the column name to transform (use 'value' for FRED data)\n"
+            "- operation: 'multiply', 'divide', 'add', 'subtract', 'normalize', "
+            "'percent_change', 'baseline', 'difference'\n"
             "- factor: the numeric factor (for multiply/divide/add/subtract), "
-            "or the look-back period for percent_change (e.g. 12 for YoY on monthly data, "
-            "4 for YoY on quarterly data). Defaults to 12.\n"
-            "- base_value: for normalize, the base value to divide by (result * 100)\n"
+            "or the look-back period for percent_change/difference (e.g. 12 for YoY on "
+            "monthly data, 4 for quarterly, 1 for month-over-month), or the row index "
+            "of the baseline row for baseline (0 = first row after x_min filtering). "
+            "Defaults to 12 for percent_change, 1 for difference, 0 for baseline.\n"
+            "- base_value: for normalize with a known numeric base value\n"
             "- suffix: display suffix (e.g., 'M' for millions, '%')\n"
-            "- label: human-readable description\n"
+            "- label: human-readable description\n\n"
+            "CRITICAL: Do NOT put a 'filter' transform on the date column. "
+            "To filter data by date, use axes.x_min and axes.x_max instead.\n\n"
+            "Available operations:\n"
+            "- baseline: subtract the first row's value from all rows (value at row 0 becomes 0). "
+            "ALWAYS set axes.x_min to the baseline date so the first row IS the baseline.\n"
+            "- normalize: divide all values by the first row's value × 100 (first row becomes 100). "
+            "ALWAYS set axes.x_min to the baseline date.\n"
+            "- difference: absolute period-over-period change (current - previous). "
+            "factor = look-back period (1 = month-over-month for monthly data).\n"
+            "- percent_change: percentage period-over-period change ((cur-prev)/|prev|×100). "
+            "factor = look-back period (12 = YoY for monthly data).\n"
+            "- multiply, divide, add, subtract: simple arithmetic on all values.\n\n"
             "Examples:\n"
-            '- Billions to millions: {"display_transforms": [{"column": "value", '
-            '"operation": "divide", "factor": 1000, "suffix": "M", '
-            '"label": "Billions to Millions"}]}\n'
-            '- Show as percentage (multiply by 100): {"display_transforms": [{"column": "value", '
-            '"operation": "multiply", "factor": 100, "suffix": "%", '
-            '"label": "Convert to percentage"}]}\n'
-            '- Year-over-year percent change (monthly data): {"display_transforms": [{"column": "value", '
-            '"operation": "percent_change", "factor": 12, "suffix": "%", '
-            '"label": "Year-over-Year % Change"}]}\n'
-            '- Year-over-year percent change (quarterly data): {"display_transforms": [{"column": "value", '
-            '"operation": "percent_change", "factor": 4, "suffix": "%", '
-            '"label": "Year-over-Year % Change"}]}\n'
-            '- Clear transforms (show original): {"display_transforms": []}\n'
-            "The original data is never modified — transforms are applied on-the-fly.\n"
-            "Use percent_change when the user asks for year-over-year, YoY, period-over-period, "
-            "or growth rate calculations. Set factor to the number of periods in one year "
-            "(12 for monthly, 4 for quarterly, 1 for annual).\n"
-            "IMPORTANT: When using percent_change, also update axes.y_label to reflect "
-            "the new unit (e.g., 'Percent change from year ago') and set axes.y_format "
-            "to 'percent'. Adjust y_min and y_max to fit the expected percentage range "
-            "(typically -5 to 15 for inflation data, but check the data).\n\n"
+            '- Change since 2010 baseline (absolute): '
+            '{"axes": {"x_min": "2010-01-01", "y_min": null, "y_max": null, '
+            '"y_label": "Change from Jan 2010 (Thousands)"}, '
+            '"display_transforms": [{"column": "value", "operation": "baseline", '
+            '"factor": 0, "label": "Change from 2010 baseline"}]}\n'
+            '- Indexed to 2010 (2010=100): '
+            '{"axes": {"x_min": "2010-01-01", "y_min": null, "y_max": null, '
+            '"y_label": "Index (2010=100)"}, '
+            '"display_transforms": [{"column": "value", "operation": "normalize", '
+            '"label": "Indexed to 2010"}]}\n'
+            '- Month-over-month change (absolute): '
+            '{"axes": {"x_min": "2010-01-01", "y_min": null, "y_max": null, '
+            '"y_label": "Monthly Change (Thousands)"}, '
+            '"display_transforms": [{"column": "value", "operation": "difference", '
+            '"factor": 1, "label": "Month-over-Month Change"}]}\n'
+            '- Year-over-year percent change (monthly data): '
+            '{"axes": {"y_min": null, "y_max": null, "y_label": "YoY % Change", '
+            '"y_format": "percent"}, '
+            '"display_transforms": [{"column": "value", "operation": "percent_change", '
+            '"factor": 12, "suffix": "%", "label": "Year-over-Year % Change"}]}\n'
+            '- Clear transforms: {"display_transforms": []}\n\n'
+            "IMPORTANT: For baseline and normalize, you MUST set axes.x_min to the "
+            "baseline date. Without x_min, the baseline will be the first row of the "
+            "entire dataset (which may be decades earlier than intended).\n"
+            "IMPORTANT: Always set y_min and y_max to null when using transforms so "
+            "the chart auto-scales to the transformed data range.\n\n"
             "IMPORTANT: If you include 'legend' in the delta, it MUST include ALL "
             "required fields: visible, position (with x and y), entries. "
             "Copy unchanged fields from the current chart state.\n"
@@ -780,10 +800,76 @@ class AIAssistantHandler:
             data["annotations"] = fixed_annotations
 
         # Sanitize display_transforms — the LLM sometimes puts date strings
-        # into numeric fields like base_value or factor.
+        # into numeric fields like base_value or factor, or uses non-standard
+        # field names (e.g. "type" instead of "operation").
         if "display_transforms" in data and isinstance(data["display_transforms"], list):
+            cleaned_transforms: list[dict] = []
             for dt in data["display_transforms"]:
                 if not isinstance(dt, dict):
+                    continue
+                # Map non-standard field names the LLM may invent
+                if "type" in dt and "operation" not in dt:
+                    dt["operation"] = dt.pop("type")
+                if "column" not in dt:
+                    # Default to "value" — the most common FRED column name
+                    dt["column"] = dt.pop("col", dt.pop("field", "value"))
+                # Handle "filter" pseudo-operation: the LLM sometimes emits
+                # a transform on the date column to filter data.  Convert it
+                # to an x_min on the axes instead.
+                op = dt.get("operation", "")
+                # Handle filter/date-filter pseudo-operations: the LLM
+                # sometimes emits a transform on the date column to filter
+                # data.  Convert it to an x_min on the axes instead.
+                if ("filter" in op or op in ("trim", "slice", "range")) and dt.get("column") in ("date", "Date"):
+                    # Try to extract a date from any field
+                    filter_date = None
+                    for fld in ("base_value", "factor", "label", "suffix", "start", "start_date"):
+                        v = dt.get(fld)
+                        if isinstance(v, str) and len(v) >= 4:
+                            filter_date = v
+                            break
+                    if filter_date:
+                        if "axes" not in data:
+                            data["axes"] = {}
+                        if isinstance(data["axes"], dict):
+                            data["axes"]["x_min"] = filter_date
+                    # Drop this pseudo-transform — it's not a real operation
+                    continue
+                # Map invented operation names to supported ones
+                _OP_MAP = {
+                    "index_to_baseline": "baseline",
+                    "index_baseline": "baseline",
+                    "difference_from_baseline": "baseline",
+                    "index_to_base_year": "normalize",
+                    "index": "normalize",
+                    "rebase": "normalize",
+                    "period_change": "percent_change",
+                    "pct_change": "percent_change",
+                    "yoy": "percent_change",
+                    "difference": "difference",
+                    "diff": "difference",
+                    "delta": "difference",
+                    "change": "difference",
+                    "subtract_baseline": "baseline",
+                    "month_over_month": "difference",
+                    "mom": "difference",
+                    "absolute_change": "difference",
+                    "year_over_year": "difference",
+                    "year_over_year_change": "difference",
+                    "yoy_change": "difference",
+                    "annual_change": "difference",
+                }
+                if op in _OP_MAP:
+                    # If the original operation name suggests yearly and factor
+                    # is the default 1, bump to 12 (monthly) or 4 (quarterly)
+                    if "year" in op and dt.get("factor") in (None, 1, 1.0):
+                        dt["factor"] = 12
+                    dt["operation"] = _OP_MAP[op]
+                # Ensure operation is one we actually support
+                _VALID_OPS = {"multiply", "divide", "add", "subtract", "normalize", "percent_change", "baseline", "difference"}
+                if dt.get("operation") not in _VALID_OPS:
+                    # Skip unknown operations entirely
+                    logger.warning("Dropping unknown display_transform operation: %s", dt.get("operation"))
                     continue
                 for numeric_field in ("factor", "base_value"):
                     val = dt.get(numeric_field)
@@ -794,5 +880,40 @@ class AIAssistantHandler:
                             # Non-numeric (e.g. a date string) — drop it so
                             # the Pydantic default kicks in.
                             dt[numeric_field] = None
+                # Clean up non-schema fields the LLM may add
+                for extra_key in list(dt.keys()):
+                    if extra_key not in ("column", "operation", "factor", "base_value", "suffix", "label"):
+                        dt.pop(extra_key)
+                cleaned_transforms.append(dt)
+            data["display_transforms"] = cleaned_transforms
+
+            # Auto-detect baseline year and force x_min when baseline/normalize
+            # operations are present but x_min is missing.  The AI consistently
+            # fails to set x_min, so we extract the year from surrounding text.
+            has_baseline_op = any(
+                ct.get("operation") in ("baseline", "normalize", "difference")
+                for ct in cleaned_transforms
+            )
+            axes = data.get("axes", {})
+            if has_baseline_op and isinstance(axes, dict) and not axes.get("x_min"):
+                import re
+                # Gather text fields that might mention the baseline year
+                text_sources = [
+                    axes.get("y_label", ""),
+                    axes.get("x_label", ""),
+                ]
+                title_data = data.get("title")
+                if isinstance(title_data, dict):
+                    text_sources.append(title_data.get("text", ""))
+                for ct in cleaned_transforms:
+                    text_sources.append(ct.get("label", ""))
+                combined = " ".join(str(s) for s in text_sources)
+                # Look for a 4-digit year between 1900 and 2099
+                years = re.findall(r'\b(19\d{2}|20\d{2})\b', combined)
+                if years:
+                    baseline_year = years[0]
+                    axes["x_min"] = f"{baseline_year}-01-01"
+                    data["axes"] = axes
+                    logger.info("Auto-set x_min to %s for baseline/normalize operation", axes["x_min"])
 
         return ChartConfigDelta.model_validate(data)

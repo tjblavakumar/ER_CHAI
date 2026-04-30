@@ -36,7 +36,7 @@ function applyDisplayTransforms(
   let result = rows.map((row) => {
     const newRow = { ...row };
     for (const t of transforms) {
-      if (t.operation === 'percent_change') continue; // handled in second pass
+      if (t.operation === 'percent_change' || t.operation === 'baseline' || t.operation === 'difference' || (t.operation === 'normalize' && (t.base_value == null || t.base_value === 0))) continue; // handled in second pass
       const val = Number(newRow[t.column]);
       if (isNaN(val)) continue;
       let res = val;
@@ -53,9 +53,19 @@ function applyDisplayTransforms(
         case 'subtract':
           res = val - (t.factor ?? 0);
           break;
-        case 'normalize':
-          res = (t.base_value ?? 1) !== 0 ? (val / (t.base_value ?? 1)) * 100 : val;
+        case 'normalize': {
+          // If base_value is set, use it. Otherwise use the first row's
+          // value for this column (allows date-based baselines via x_min
+          // filtering — the AI sets x_min to the baseline date and
+          // normalize automatically uses that first row).
+          let base = t.base_value;
+          if (base == null || base === 0) {
+            // Resolve from first row — done in second pass below
+            break;
+          }
+          res = base !== 0 ? (val / base) * 100 : val;
           break;
+        }
         default:
           break;
       }
@@ -64,24 +74,67 @@ function applyDisplayTransforms(
     return newRow;
   });
 
-  // Second pass: percent_change needs access to prior rows.
-  // factor = look-back period (e.g. 12 for YoY on monthly data, 4 for
-  // quarterly). Defaults to 12.
+  // Second pass: percent_change and baseline need access to all rows.
+  // percent_change: factor = look-back period (e.g. 12 for YoY on monthly
+  // data, 4 for quarterly). Defaults to 12.
+  // baseline: subtract the value at the baseline row from every row.
+  //   factor = row index of the baseline (0-based). If not set, uses the
+  //   first row (index 0). The baseline row itself becomes 0.
   for (const t of transforms) {
-    if (t.operation !== 'percent_change') continue;
-    const period = Math.max(Math.round(t.factor ?? 12), 1);
-    const col = t.column;
-    result = result.map((row, i) => {
-      if (i < period) {
-        return { ...row, [col]: NaN };
+    if (t.operation === 'percent_change') {
+      const period = Math.max(Math.round(t.factor ?? 12), 1);
+      const col = t.column;
+      result = result.map((row, i) => {
+        if (i < period) {
+          return { ...row, [col]: NaN };
+        }
+        const prev = Number(result[i - period][col]);
+        const cur = Number(row[col]);
+        if (isNaN(prev) || isNaN(cur) || prev === 0) {
+          return { ...row, [col]: NaN };
+        }
+        return { ...row, [col]: ((cur - prev) / Math.abs(prev)) * 100 };
+      });
+    } else if (t.operation === 'baseline') {
+      const col = t.column;
+      const baseIdx = Math.max(Math.round(t.factor ?? 0), 0);
+      const baseVal = baseIdx < result.length ? Number(result[baseIdx][col]) : NaN;
+      if (!isNaN(baseVal)) {
+        result = result.map((row) => {
+          const val = Number(row[col]);
+          if (isNaN(val)) return { ...row, [col]: NaN };
+          return { ...row, [col]: val - baseVal };
+        });
       }
-      const prev = Number(result[i - period][col]);
-      const cur = Number(row[col]);
-      if (isNaN(prev) || isNaN(cur) || prev === 0) {
-        return { ...row, [col]: NaN };
+    } else if (t.operation === 'normalize' && (t.base_value == null || t.base_value === 0)) {
+      // Normalize using first row's value as base (date-based baseline)
+      const col = t.column;
+      const baseIdx = Math.max(Math.round(t.factor ?? 0), 0);
+      const baseVal = baseIdx < result.length ? Number(result[baseIdx][col]) : NaN;
+      if (!isNaN(baseVal) && baseVal !== 0) {
+        result = result.map((row) => {
+          const val = Number(row[col]);
+          if (isNaN(val)) return { ...row, [col]: NaN };
+          return { ...row, [col]: (val / baseVal) * 100 };
+        });
       }
-      return { ...row, [col]: ((cur - prev) / Math.abs(prev)) * 100 };
-    });
+    } else if (t.operation === 'difference') {
+      // Absolute period-over-period change: current - previous
+      // factor = look-back period (default 1 for month-over-month)
+      const period = Math.max(Math.round(t.factor ?? 1), 1);
+      const col = t.column;
+      result = result.map((row, i) => {
+        if (i < period) {
+          return { ...row, [col]: NaN };
+        }
+        const prev = Number(result[i - period][col]);
+        const cur = Number(row[col]);
+        if (isNaN(prev) || isNaN(cur)) {
+          return { ...row, [col]: NaN };
+        }
+        return { ...row, [col]: cur - prev };
+      });
+    }
   }
 
   return result;
@@ -328,6 +381,29 @@ const CanvasEditor: React.FC = () => {
     return filteredRows.map((row) => String(row[dateCol] ?? ''));
   }, [filteredRows, xLabels]);
 
+  // Auto-compute y-range from transformed data when axes y_min/y_max are null.
+  // Must be before the early return to satisfy Rules of Hooks.
+  const autoYRange = React.useMemo(() => {
+    if (!transformedRows || transformedRows.length === 0 || !chartState) return { min: 0, max: 100 };
+    const visibleColumns = chartState.series.filter((s) => s.visible).map((s) => s.column);
+    if (visibleColumns.length === 0) return { min: 0, max: 100 };
+    let min = Infinity;
+    let max = -Infinity;
+    for (const row of transformedRows) {
+      for (const col of visibleColumns) {
+        const val = Number(row[col]);
+        if (!isNaN(val) && isFinite(val)) {
+          if (val < min) min = val;
+          if (val > max) max = val;
+        }
+      }
+    }
+    if (!isFinite(min) || !isFinite(max)) return { min: 0, max: 100 };
+    // Add 10% padding
+    const range = max - min || 1;
+    return { min: min - range * 0.1, max: max + range * 0.1 };
+  }, [transformedRows, chartState]);
+
   if (!chartState) {
     return (
       <div
@@ -349,8 +425,8 @@ const CanvasEditor: React.FC = () => {
     );
   }
 
-  const yMin = chartState.axes.y_min ?? 0;
-  const yMax = chartState.axes.y_max ?? 100;
+  const yMin = chartState.axes.y_min ?? autoYRange.min;
+  const yMax = chartState.axes.y_max ?? autoYRange.max;
 
   // Resolve positions from elements_positions or use defaults
   const resolvePos = (id: string, fallback: Position): Position =>

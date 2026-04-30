@@ -251,7 +251,7 @@ class DataTableConfig(BaseModel):
 class DisplayTransform(BaseModel):
     """A non-destructive display transformation applied to a data column."""
     column: str  # column to transform
-    operation: str  # "multiply", "divide", "add", "subtract", "percent_change", "normalize"
+    operation: str  # "multiply", "divide", "add", "subtract", "percent_change", "normalize", "baseline", "difference"
     factor: float = 1.0  # factor for multiply/divide/add/subtract
     base_value: float | None = None  # for normalize: the base value to divide by
     suffix: str = ""  # display suffix (e.g., "M", "%")

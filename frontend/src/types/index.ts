@@ -101,7 +101,7 @@ export interface DataTableConfig {
 
 export interface DisplayTransform {
   column: string;
-  operation: string; // "multiply" | "divide" | "add" | "subtract" | "percent_change" | "normalize"
+  operation: string; // "multiply" | "divide" | "add" | "subtract" | "percent_change" | "normalize" | "baseline" | "difference"
   factor?: number;
   base_value?: number | null;
   suffix?: string;
