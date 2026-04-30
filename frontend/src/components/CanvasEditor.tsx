@@ -31,35 +31,60 @@ function applyDisplayTransforms(
   transforms: import('../types').DisplayTransform[],
 ): Record<string, unknown>[] {
   if (!transforms || transforms.length === 0) return rows;
-  return rows.map((row) => {
+
+  // First pass: apply per-value transforms (multiply, divide, etc.)
+  let result = rows.map((row) => {
     const newRow = { ...row };
     for (const t of transforms) {
+      if (t.operation === 'percent_change') continue; // handled in second pass
       const val = Number(newRow[t.column]);
       if (isNaN(val)) continue;
-      let result = val;
+      let res = val;
       switch (t.operation) {
         case 'multiply':
-          result = val * (t.factor ?? 1);
+          res = val * (t.factor ?? 1);
           break;
         case 'divide':
-          result = (t.factor ?? 1) !== 0 ? val / (t.factor ?? 1) : val;
+          res = (t.factor ?? 1) !== 0 ? val / (t.factor ?? 1) : val;
           break;
         case 'add':
-          result = val + (t.factor ?? 0);
+          res = val + (t.factor ?? 0);
           break;
         case 'subtract':
-          result = val - (t.factor ?? 0);
+          res = val - (t.factor ?? 0);
           break;
         case 'normalize':
-          result = (t.base_value ?? 1) !== 0 ? (val / (t.base_value ?? 1)) * 100 : val;
+          res = (t.base_value ?? 1) !== 0 ? (val / (t.base_value ?? 1)) * 100 : val;
           break;
         default:
           break;
       }
-      newRow[t.column] = result;
+      newRow[t.column] = res;
     }
     return newRow;
   });
+
+  // Second pass: percent_change needs access to prior rows.
+  // factor = look-back period (e.g. 12 for YoY on monthly data, 4 for
+  // quarterly). Defaults to 12.
+  for (const t of transforms) {
+    if (t.operation !== 'percent_change') continue;
+    const period = Math.max(Math.round(t.factor ?? 12), 1);
+    const col = t.column;
+    result = result.map((row, i) => {
+      if (i < period) {
+        return { ...row, [col]: NaN };
+      }
+      const prev = Number(result[i - period][col]);
+      const cur = Number(row[col]);
+      if (isNaN(prev) || isNaN(cur) || prev === 0) {
+        return { ...row, [col]: NaN };
+      }
+      return { ...row, [col]: ((cur - prev) / Math.abs(prev)) * 100 };
+    });
+  }
+
+  return result;
 }
 
 const CanvasEditor: React.FC = () => {

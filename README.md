@@ -1,4 +1,4 @@
-# CHAI : Chart AI Assistant v3.2
+# CHAI : Chart AI Assistant v3.3
 
 An AI-powered web application for creating, customizing, and exporting publication-quality economic charts. Built with FastAPI (Python) backend and React + Konva.js frontend, powered by AWS Bedrock (Claude Sonnet 4.5) for AI-driven chart editing, Vision AI image analysis, and executive summary generation.
 
@@ -46,7 +46,8 @@ An AI-powered web application for creating, customizing, and exporting publicati
 - **Data Q&A**: Ask questions about your data — trends, peaks, comparisons
 - **Summary Updates**: "Append this information to the executive summary"
 - **Custom Data Tables**: AI can create fully custom tables with arbitrary headers and rows
-- **Display Transforms**: Non-destructive value transformations — "convert to millions", "show as percentage" — original data stays intact
+- **Display Transforms**: Non-destructive value transformations — "convert to millions", "show as percentage", "year-over-year percent change" — original data stays intact
+- **Year-over-Year Calculations**: "Show YoY percent change" computes period-over-period growth rates with configurable look-back (12 for monthly, 4 for quarterly)
 - **Annotation Management**: Add, customize, and remove annotations by name
 - **Floating Chat Window**: Bottom-right icon opens the AI chat with undo support
 - **Resizable Chat Window**: Drag the top, left, or top-left corner to resize the AI chat panel (300-900px range). Font size selector in the header (12-18px)
