@@ -9,7 +9,7 @@ const SummaryEditor: React.FC = () => {
   const setSummaryText = useAppStore((s) => s.setSummaryText);
   const chartState = useAppStore((s) => s.chartState);
   const [generating, setGenerating] = useState(false);
-  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [isPreviewMode, setIsPreviewMode] = useState(true);
 
   const handleGenerate = async () => {
     if (!chartState) return;
@@ -22,6 +22,7 @@ const SummaryEditor: React.FC = () => {
       };
       const text = await generateSummary(chartState.dataset_path, context);
       setSummaryText(text);
+      setIsPreviewMode(true);
     } catch {
       // Error toast handled by API interceptor
     } finally {

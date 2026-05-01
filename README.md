@@ -80,6 +80,8 @@ An AI-powered web application for creating, customizing, and exporting publicati
 
 ### 8. Executive Summary
 - **Auto-generated**: Trend analysis, peaks/troughs, predictions, economist perspective
+- **Markdown Rendered**: Summary displays as formatted rich text by default (headings, bold, lists) instead of raw Markdown symbols
+- **Edit/Preview Toggle**: Switch between rendered preview and raw Markdown editor with a single click
 - **Resizable Panel**: Drag the divider to expand the summary section
 - **Editable**: Full-height text area that fills the panel with vertical scrollbar
 - **AI Append**: Ask the AI to add analysis to the summary
