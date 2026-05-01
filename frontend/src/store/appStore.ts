@@ -39,6 +39,9 @@ export interface AppState {
   isLoading: boolean;
   loadingMessage: string;
 
+  // Color palette
+  activePaletteName: string;
+
   // Canvas size
   canvasWidth: number;
   canvasHeight: number;
@@ -70,6 +73,7 @@ export interface AppState {
   setPreviewVariants: (variants: { label: string; description: string; chartState: ChartState }[], rows: Record<string, unknown>[] | null, info: DatasetInfo | null) => void;
   setShowPreviewOverlay: (show: boolean) => void;
   setCanvasSize: (width: number, height: number) => void;
+  setActivePaletteName: (name: string) => void;
   resetForNewChart: () => void;
 }
 
@@ -104,6 +108,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   aiChatOpen: false,
   isLoading: false,
   loadingMessage: '',
+
+  // Color palette
+  activePaletteName: 'FRBSF Default',
 
   // Canvas size
   canvasWidth: 1400,
@@ -168,6 +175,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   }),
   setShowPreviewOverlay: (show) => set({ showPreviewOverlay: show }),
   setCanvasSize: (width, height) => set({ canvasWidth: width, canvasHeight: height }),
+  setActivePaletteName: (name) => set({ activePaletteName: name }),
 
   resetForNewChart: () =>
     set({
@@ -187,6 +195,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       previewDatasetRows: null,
       previewDatasetInfo: null,
       showPreviewOverlay: false,
+      activePaletteName: 'FRBSF Default',
       canvasWidth: 1400,
       canvasHeight: 800,
     }),

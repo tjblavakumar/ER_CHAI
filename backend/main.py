@@ -104,7 +104,7 @@ def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     app = FastAPI(
         title="FRBSF Chart Builder",
-        version="3.3.0",
+        version="4.0.0",
         lifespan=lifespan,
     )
 

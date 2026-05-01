@@ -305,8 +305,8 @@ class AIAssistantHandler:
             '"auto", "integer" (whole numbers), "percent" (adds % symbol), '
             '"decimal1", "decimal2"\n'
             "- 'line_width': axis line thickness (default 1, range 0.5-10)\n"
-            "- 'tick_font_size': font size for tick labels (default 10)\n"
-            "- 'label_font_size': font size for axis labels (default 12)\n"
+            "- 'tick_font_size': font size for tick labels (default 14)\n"
+            "- 'label_font_size': font size for axis labels (default 14)\n"
             'Example: {"axes": {"y_format": "percent"}} adds % to y-axis values\n'
             'Example: {"axes": {"y_format": "integer"}} shows whole numbers\n'
             'Example: {"axes": {"line_width": 5}} makes axis lines thicker\n'
@@ -599,7 +599,7 @@ class AIAssistantHandler:
                            if current_chart_state.data_table else {
                                "visible": False, "position": {"x": 70, "y": 490},
                                "columns": current_chart_state.dataset_columns,
-                               "font_size": 10, "max_rows": 5,
+                               "font_size": 14, "max_rows": 5,
                            })
             data["data_table"] = {**existing_dt, **dt}
 
@@ -701,7 +701,7 @@ class AIAssistantHandler:
                     else:
                         pos["y"] = _safe_float(pos["y"])
                 # Fill in default font properties
-                ann.setdefault("font_size", 10)
+                ann.setdefault("font_size", 14)
                 ann.setdefault("font_color", "#333333")
                 # Fill in horizontal_line defaults
                 if ann["type"] == "horizontal_line":

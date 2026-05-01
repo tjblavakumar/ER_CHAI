@@ -10,6 +10,7 @@ import SummaryEditor from './components/SummaryEditor';
 import ExportToolbar from './components/ExportToolbar';
 import AIChatWindow from './components/AIChatWindow';
 import ChartPreviewOverlay from './components/ChartPreviewOverlay';
+import ColorPaletteDropdown from './components/ColorPaletteDropdown';
 import { generateChartVariants } from './utils/chartVariants';
 
 // ---------------------------------------------------------------------------
@@ -659,7 +660,7 @@ const App: React.FC = () => {
           >
             <h1 style={{ fontSize: 18, margin: 0, display: 'flex', alignItems: 'baseline', gap: 8 }}>
               CHAI : Chart AI Assistant
-              <span style={{ fontSize: 11, fontWeight: 400, color: '#888', fontStyle: 'italic' }}>v3.2</span>
+              <span style={{ fontSize: 11, fontWeight: 400, color: '#888', fontStyle: 'italic' }}>v4.0</span>
             </h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -688,6 +689,7 @@ const App: React.FC = () => {
                   Exe Summary
                 </button>
               </div>
+              <ColorPaletteDropdown />
               <BedrockStatus />
               <ExportToolbar />
             </div>

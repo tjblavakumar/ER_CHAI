@@ -1,0 +1,62 @@
+# US Recession Periods Configuration
+# Source: NBER (National Bureau of Economic Research)
+# https://www.nber.org/research/data/us-business-cycle-expansions-and-contractions
+#
+# Each entry defines a recession period with:
+#   start: Start date (YYYY-MM-DD) — peak month
+#   end:   End date (YYYY-MM-DD) — trough month
+#   label: (optional) Text label displayed on the band
+#
+# Add, edit, or remove entries as needed. Any recession that overlaps
+# the chart's data range will automatically appear as a gray vertical band.
+
+band_color: "#d3d3d3"   # Default band color (light gray)
+
+recessions:
+  - start: "1948-11-01"
+    end: "1949-10-01"
+    label: ""
+
+  - start: "1953-07-01"
+    end: "1954-05-01"
+    label: ""
+
+  - start: "1957-08-01"
+    end: "1958-04-01"
+    label: ""
+
+  - start: "1960-04-01"
+    end: "1961-02-01"
+    label: ""
+
+  - start: "1969-12-01"
+    end: "1970-11-01"
+    label: ""
+
+  - start: "1973-11-01"
+    end: "1975-03-01"
+    label: "Oil Crisis"
+
+  - start: "1980-01-01"
+    end: "1980-07-01"
+    label: ""
+
+  - start: "1981-07-01"
+    end: "1982-11-01"
+    label: ""
+
+  - start: "1990-07-01"
+    end: "1991-03-01"
+    label: "Gulf War"
+
+  - start: "2001-03-01"
+    end: "2001-11-01"
+    label: "Dot-com"
+
+  - start: "2007-12-01"
+    end: "2009-06-01"
+    label: "Great Recession"
+
+  - start: "2020-02-01"
+    end: "2020-04-01"
+    label: "COVID-19"
