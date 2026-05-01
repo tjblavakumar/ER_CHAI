@@ -1,17 +1,14 @@
 """AI Assistant Handler for the FRBSF Chart Builder.
 
 Provides conversational chart modification and data Q&A capabilities
-using AWS Bedrock. Maintains per-session conversation history in memory.
+using either AWS Bedrock or LiteLLM. Maintains per-session conversation history in memory.
 """
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-from typing import Any, Literal
-
-import boto3
+from typing import Literal
 
 from backend.models.schemas import (
     AIResponse,
@@ -22,16 +19,9 @@ from backend.models.schemas import (
     Position,
     SeriesConfig,
 )
+from backend.services.llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-_MAX_RETRIES = 2
-_RETRY_DELAY_SECONDS = 2.0
-
 
 # ---------------------------------------------------------------------------
 # AI Assistant Handler
@@ -39,19 +29,15 @@ _RETRY_DELAY_SECONDS = 2.0
 
 
 class AIAssistantHandler:
-    """Orchestrates AI-driven chart modification and data Q&A via Bedrock."""
+    """Orchestrates AI-driven chart modification and data Q&A via LLM."""
 
-    def __init__(
-        self,
-        bedrock_client: Any | None = None,
-        *,
-        region: str = "us-east-1",
-        model_id: str = "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-    ) -> None:
-        self._bedrock = bedrock_client or boto3.client(
-            "bedrock-runtime", region_name=region,
-        )
-        self._model_id = model_id
+    def __init__(self, llm_client: LLMClient) -> None:
+        """Initialize the AI assistant with an LLM client.
+        
+        Args:
+            llm_client: An LLMClient instance (Bedrock or LiteLLM)
+        """
+        self._llm_client = llm_client
         self._sessions: dict[str, list[dict]] = {}
 
     # -- Public API ---------------------------------------------------------
@@ -164,7 +150,7 @@ class AIAssistantHandler:
             "Respond with ONLY the category name, nothing else."
         )
 
-        response_text = await self._invoke_bedrock(prompt)
+        response_text = await self._llm_client.invoke(prompt)
         cleaned = response_text.strip().strip('"').strip("'").lower()
 
         if "chart_modify" in cleaned:
@@ -230,7 +216,7 @@ class AIAssistantHandler:
             "Return ONLY valid JSON. No markdown fences. No explanation outside JSON."
         )
 
-        response_text = await self._invoke_bedrock(prompt)
+        response_text = await self._llm_client.invoke(prompt)
         logger.info("AI suggestions raw response: %s", response_text[:500])
 
         # Parse the suggestions
@@ -427,7 +413,7 @@ class AIAssistantHandler:
             "Return ONLY valid JSON, no markdown fences or explanation."
         )
 
-        response_text = await self._invoke_bedrock(prompt)
+        response_text = await self._llm_client.invoke(prompt)
         logger.info("AI chart modify raw response: %s", response_text[:500])
         return self._parse_chart_delta(response_text, chart_context.chart_state)
 
@@ -463,7 +449,7 @@ class AIAssistantHandler:
             "Do not perform web searches."
         )
 
-        return await self._invoke_bedrock(prompt)
+        return await self._llm_client.invoke(prompt)
 
     # -- Summary update -----------------------------------------------------
 
@@ -507,7 +493,7 @@ class AIAssistantHandler:
             "Use markdown formatting (headings, lists, bold) as appropriate."
         )
 
-        response_text = await self._invoke_bedrock(prompt)
+        response_text = await self._llm_client.invoke(prompt)
         
         # Parse the JSON response
         try:
@@ -526,52 +512,6 @@ class AIAssistantHandler:
             # Fallback: if parsing fails, treat as append and use raw response
             logger.warning("Failed to parse summary update response as JSON, using raw text")
             return response_text, False
-
-    # -- Bedrock invocation with retry --------------------------------------
-
-    async def _invoke_bedrock(self, prompt: str) -> str:
-        """Call Bedrock with retry logic (up to 2 retries, 2s delay).
-
-        Returns the text content from the model response.
-        Raises ``RuntimeError`` if all attempts fail.
-        """
-        last_error: Exception | None = None
-
-        for attempt in range(_MAX_RETRIES + 1):
-            try:
-                body = json.dumps({
-                    "anthropic_version": "bedrock-2023-05-31",
-                    "max_tokens": 8192,
-                    "messages": [
-                        {"role": "user", "content": prompt},
-                    ],
-                })
-
-                response = await asyncio.to_thread(
-                    self._bedrock.invoke_model,
-                    modelId=self._model_id,
-                    contentType="application/json",
-                    accept="application/json",
-                    body=body,
-                )
-
-                response_body = json.loads(response["body"].read())
-                return response_body["content"][0]["text"]
-
-            except Exception as exc:
-                last_error = exc
-                logger.warning(
-                    "Bedrock call failed (attempt %d/%d): %s",
-                    attempt + 1,
-                    _MAX_RETRIES + 1,
-                    exc,
-                )
-                if attempt < _MAX_RETRIES:
-                    await asyncio.sleep(_RETRY_DELAY_SECONDS)
-
-        raise RuntimeError(
-            f"Bedrock API call failed after {_MAX_RETRIES + 1} attempts: {last_error}"
-        )
 
     # -- Helpers ------------------------------------------------------------
 

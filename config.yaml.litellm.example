@@ -1,0 +1,38 @@
+# FRBSF Chart Builder Configuration - LiteLLM Example
+# ======================================================
+# This example shows how to configure the application to use the internal
+# Federal Reserve LiteLLM API endpoint instead of AWS Bedrock.
+
+# FRED API key — obtain from https://fred.stlouisfed.org/docs/api/api_key.html
+fred_api_key: "YOUR_FRED_API_KEY"
+
+# ============================================================================
+# LLM Provider Selection
+# ============================================================================
+# Set to "litellm" to use the internal Federal Reserve API
+llm_provider: "litellm"
+
+# ============================================================================
+# LiteLLM Configuration
+# ============================================================================
+# Internal Federal Reserve LiteLLM API endpoint
+litellm_api_base: "https://martinai-preview-api.frb.gov"
+
+# Your internal API key (obtain from your Federal Reserve API portal)
+litellm_api_key: "YOUR_INTERNAL_API_KEY"
+
+# Model IDs for LiteLLM
+# These should match the models available on your internal endpoint
+litellm_model_id: "claude-3-5-sonnet-20241022"
+litellm_vision_model_id: "claude-3-5-sonnet-20241022"
+
+# ============================================================================
+# AWS Bedrock Configuration (NOT NEEDED when using LiteLLM)
+# ============================================================================
+# You can leave these commented out or omit them entirely when using LiteLLM
+
+# aws_region: "us-east-1"
+# aws_access_key_id: "AKIA..."
+# aws_secret_access_key: "secret..."
+# bedrock_model_id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+# bedrock_vision_model_id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"

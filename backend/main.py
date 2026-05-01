@@ -26,6 +26,7 @@ from backend.services.export_service import ExportService
 from backend.services.fred_client import FREDClient
 from backend.services.image_analyzer import ImageAnalyzer
 from backend.services.ingestion import DataIngestionService
+from backend.services.llm_client import create_llm_client
 from backend.services.project_store import ProjectStore
 from backend.services.summary_generator import SummaryGenerator
 
@@ -42,30 +43,41 @@ async def lifespan(app: FastAPI):
         print(f"\n*** Configuration Error ***\n{exc}\n", file=sys.stderr)
         sys.exit(1)
 
-    # Build shared Bedrock client
-    bedrock_kwargs: dict = {"region_name": config.aws_region}
-    if config.aws_access_key_id and config.aws_secret_access_key:
-        bedrock_kwargs["aws_access_key_id"] = config.aws_access_key_id
-        bedrock_kwargs["aws_secret_access_key"] = config.aws_secret_access_key
-        if config.aws_session_token:
-            bedrock_kwargs["aws_session_token"] = config.aws_session_token
-    bedrock_client = boto3.client("bedrock-runtime", **bedrock_kwargs)
+    # Create LLM clients for AI functionality
+    llm_client = create_llm_client(config, use_vision=False)
+    vision_llm_client = create_llm_client(config, use_vision=True)
+
+    # Build Bedrock client only if needed (for ImageAnalyzer which still uses Bedrock)
+    bedrock_client = None
+    if config.llm_provider == "bedrock" or config.aws_region:
+        bedrock_kwargs: dict = {"region_name": config.aws_region or "us-east-1"}
+        if config.aws_access_key_id and config.aws_secret_access_key:
+            bedrock_kwargs["aws_access_key_id"] = config.aws_access_key_id
+            bedrock_kwargs["aws_secret_access_key"] = config.aws_secret_access_key
+            if config.aws_session_token:
+                bedrock_kwargs["aws_session_token"] = config.aws_session_token
+        try:
+            bedrock_client = boto3.client("bedrock-runtime", **bedrock_kwargs)
+        except Exception as exc:
+            logger.warning("Failed to create Bedrock client (not required for LiteLLM): %s", exc)
+            bedrock_client = None
 
     # Initialize services
     fred_client = FREDClient(api_key=config.fred_api_key)
-    image_analyzer = ImageAnalyzer(
-        bedrock_client=bedrock_client,
-        vision_model_id=config.bedrock_vision_model_id,
-    )
+    
+    # ImageAnalyzer - create only if Bedrock client is available
+    # (ImageAnalyzer still requires Bedrock for vision analysis)
+    if bedrock_client:
+        image_analyzer = ImageAnalyzer(
+            bedrock_client=bedrock_client,
+            vision_model_id=config.bedrock_vision_model_id or "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        )
+    else:
+        logger.warning("ImageAnalyzer disabled - Bedrock client not available")
+        image_analyzer = None
     ingestion_service = DataIngestionService(fred_client=fred_client, image_analyzer=image_analyzer)
-    ai_assistant = AIAssistantHandler(
-        bedrock_client=bedrock_client,
-        model_id=config.bedrock_model_id,
-    )
-    summary_generator = SummaryGenerator(
-        bedrock_client=bedrock_client,
-        model_id=config.bedrock_model_id,
-    )
+    ai_assistant = AIAssistantHandler(llm_client=llm_client)
+    summary_generator = SummaryGenerator(llm_client=llm_client)
     export_service = ExportService()
     project_store = ProjectStore()
 
@@ -78,10 +90,11 @@ async def lifespan(app: FastAPI):
         project_store=project_store,
     )
 
-    # Bedrock status — checked lazily via /api/bedrock/status endpoint
-    app.state.bedrock_status = {"active": False, "model": config.bedrock_model_id, "error": "Not checked yet"}
+    # LLM status — checked lazily via /api/bedrock/status endpoint
+    app.state.bedrock_status = {"active": False, "model": config.bedrock_model_id or config.litellm_model_id, "error": "Not checked yet"}
     app.state.bedrock_client = bedrock_client
-    app.state.bedrock_model_id = config.bedrock_model_id
+    app.state.bedrock_model_id = config.bedrock_model_id or config.litellm_model_id
+    app.state.llm_provider = config.llm_provider
 
     logger.info("FRBSF Chart Builder started successfully.")
     yield

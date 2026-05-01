@@ -1,18 +1,16 @@
 """Summary Generator for the FRBSF Chart Builder.
 
-Produces executive summaries of economic datasets using AWS Bedrock,
+Produces executive summaries of economic datasets using configurable LLM provider (Bedrock or LiteLLM),
 including trend analysis, peak/trough identification, predictions,
 and economist-perspective interpretation.
 """
 
 from __future__ import annotations
 
-import asyncio
-import json
-import logging
-from typing import Any
-
-import boto3
+import json
+import logging
+
+from backend.services.llm_client import LLMClient
 import pandas as pd
 
 from backend.models.schemas import ChartContext
@@ -20,32 +18,20 @@ from backend.models.schemas import ChartContext
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-_MAX_RETRIES = 2
-_RETRY_DELAY_SECONDS = 2.0
-
-
-# ---------------------------------------------------------------------------
 # Summary Generator
 # ---------------------------------------------------------------------------
 
 
 class SummaryGenerator:
-    """Generates executive summaries for economic chart data via Bedrock."""
+    """Generates executive summaries for economic chart data via LLM."""
 
-    def __init__(
-        self,
-        bedrock_client: Any | None = None,
-        *,
-        region: str = "us-east-1",
-        model_id: str = "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-    ) -> None:
-        self._bedrock = bedrock_client or boto3.client(
-            "bedrock-runtime", region_name=region,
-        )
-        self._model_id = model_id
+    def __init__(self, llm_client: LLMClient) -> None:
+        """Initialize the summary generator with an LLM client.
+        
+        Args:
+            llm_client: An LLMClient instance (Bedrock or LiteLLM)
+        """
+        self._llm_client = llm_client
 
     # -- Public API ---------------------------------------------------------
 
@@ -61,7 +47,7 @@ class SummaryGenerator:
         No web searches are performed.
         """
         prompt = self._build_prompt(dataset, chart_context)
-        return await self._invoke_bedrock(prompt)
+        return await self._llm_client.invoke(prompt)
 
     # -- Prompt construction ------------------------------------------------
 
@@ -102,48 +88,4 @@ class SummaryGenerator:
             "audience."
         )
 
-    # -- Bedrock invocation with retry --------------------------------------
 
-    async def _invoke_bedrock(self, prompt: str) -> str:
-        """Call Bedrock with retry logic (up to 2 retries, 2 s delay).
-
-        Returns the text content from the model response.
-        Raises ``RuntimeError`` if all attempts fail.
-        """
-        last_error: Exception | None = None
-
-        for attempt in range(_MAX_RETRIES + 1):
-            try:
-                body = json.dumps({
-                    "anthropic_version": "bedrock-2023-05-31",
-                    "max_tokens": 8192,
-                    "messages": [
-                        {"role": "user", "content": prompt},
-                    ],
-                })
-
-                response = await asyncio.to_thread(
-                    self._bedrock.invoke_model,
-                    modelId=self._model_id,
-                    contentType="application/json",
-                    accept="application/json",
-                    body=body,
-                )
-
-                response_body = json.loads(response["body"].read())
-                return response_body["content"][0]["text"]
-
-            except Exception as exc:
-                last_error = exc
-                logger.warning(
-                    "Bedrock call failed (attempt %d/%d): %s",
-                    attempt + 1,
-                    _MAX_RETRIES + 1,
-                    exc,
-                )
-                if attempt < _MAX_RETRIES:
-                    await asyncio.sleep(_RETRY_DELAY_SECONDS)
-
-        raise RuntimeError(
-            f"Bedrock API call failed after {_MAX_RETRIES + 1} attempts: {last_error}"
-        )

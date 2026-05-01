@@ -10,12 +10,23 @@ from pydantic import BaseModel
 
 class AppConfig(BaseModel):
     fred_api_key: str
-    aws_region: str
+    
+    # LLM Provider Selection: "bedrock" or "litellm"
+    llm_provider: str = "bedrock"
+    
+    # AWS Bedrock Configuration
+    aws_region: str | None = None
     aws_access_key_id: str | None = None
     aws_secret_access_key: str | None = None
     aws_session_token: str | None = None
     bedrock_model_id: str = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
     bedrock_vision_model_id: str = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+    
+    # LiteLLM Configuration
+    litellm_api_base: str | None = None  # e.g., "https://martinai-preview-api.frb.gov"
+    litellm_api_key: str | None = None
+    litellm_model_id: str = "claude-3-5-sonnet-20241022"
+    litellm_vision_model_id: str = "claude-3-5-sonnet-20241022"
 
 
 # --- Data ---

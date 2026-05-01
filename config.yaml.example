@@ -5,13 +5,36 @@
 # FRED API key — obtain from https://fred.stlouisfed.org/docs/api/api_key.html
 fred_api_key: "YOUR_FRED_API_KEY"
 
+# ============================================================================
+# LLM Provider Selection
+# ============================================================================
+# Choose which LLM provider to use: "bedrock" or "litellm"
+llm_provider: "bedrock"
+
+# ============================================================================
+# AWS Bedrock Configuration (only needed if llm_provider = "bedrock")
+# ============================================================================
 # AWS region for Bedrock access
 aws_region: "us-east-1"
 
 # AWS credentials (optional if using IAM role / instance profile)
 # aws_access_key_id: "AKIA..."
 # aws_secret_access_key: "secret..."
+# aws_session_token: "your-session-token"  # required for SSO/STS credentials
 
 # Bedrock model IDs (defaults shown — override if needed)
 bedrock_model_id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 bedrock_vision_model_id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+
+# ============================================================================
+# LiteLLM Configuration (only needed if llm_provider = "litellm")
+# ============================================================================
+# LiteLLM API endpoint (internal Federal Reserve API)
+# litellm_api_base: "https://martinai-preview-api.frb.gov"
+
+# LiteLLM API key (obtain from your internal API portal)
+# litellm_api_key: "YOUR_LITELLM_API_KEY"
+
+# LiteLLM model IDs
+# litellm_model_id: "claude-3-5-sonnet-20241022"
+# litellm_vision_model_id: "claude-3-5-sonnet-20241022"
