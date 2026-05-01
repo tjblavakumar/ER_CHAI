@@ -1,4 +1,4 @@
-# CHAI : Chart AI Assistant v3.3
+# CHAI : Chart AI Assistant v4.0
 
 An AI-powered web application for creating, customizing, and exporting publication-quality economic charts. Built with FastAPI (Python) backend and React + Konva.js frontend, powered by AWS Bedrock (Claude Sonnet 4.5) for AI-driven chart editing, Vision AI image analysis, and executive summary generation.
 
@@ -27,11 +27,15 @@ An AI-powered web application for creating, customizing, and exporting publicati
 - **Bar Grouping**: By series (default) or by category for categorical data
 - **Manual Controls**: Axis properties (labels, ranges, scales, line width, tick/label font sizes, Y-axis format), series colors/styles, gridlines, legend, data table
 - **Resizable Panels**: VS Code-style draggable dividers between all sections (left sidebar, canvas, controls, summary) with minimum size constraints
+- **Color Palette Dropdown**: Top navigation bar dropdown to switch between predefined color palettes (FRBSF Default, Vivid, Pastel, Earth Tones, Monochrome Blue, Tableau 10). Selecting a palette updates all series and legend colors instantly
+- **FRBSF Default Palette**: Dark blue (#2e5e8b), Green (#8baf3e), Gold (#fcc62d), Light blue (#88cde5), Red (#b63b36), Dark gray (#474747)
+- **Larger Defaults**: Font sizes default to 14px minimum across all chart elements; series line width defaults to 4px; axis line width defaults to 2px for better readability
 
 ### 3. Annotations
 - **Horizontal Lines**: Dotted/dashed/solid reference lines at specific Y values (e.g., inflation target)
 - **Vertical Lines**: Lines at specific dates (e.g., financial crisis, COVID)
 - **Vertical Bands**: Shaded regions between date ranges (e.g., recession periods) with optional labels
+- **Automatic Recession Shading**: All time-series charts automatically include gray vertical bands for NBER US recession periods that overlap the data's date range. Periods are loaded from `recession_config.yaml` — users can add, edit, remove entries or add optional labels (e.g., "Great Recession", "COVID-19") without touching code
 - **Text Annotations**: Floating text labels anywhere on the chart
 - **Full Label Customization**: All annotation types support editable label text, font size, and font color
 - **Add/Delete**: Manual buttons (+ H-Line, + V-Line, + Text, + V-Band), ✕ delete per annotation, and "Delete All Annotations" button
@@ -164,6 +168,25 @@ aws sso login
 aws configure export-credentials --format env
 ```
 
+### 5. Configure recession shading (optional)
+
+Edit `recession_config.yaml` to customize recession bands shown on time-series charts:
+
+```yaml
+band_color: "#d3d3d3"
+
+recessions:
+  - start: "2007-12-01"
+    end: "2009-06-01"
+    label: "Great Recession"    # optional — displayed on the band
+
+  - start: "2020-02-01"
+    end: "2020-04-01"
+    label: "COVID-19"
+```
+
+Add, remove, or relabel entries as needed. Any recession period that overlaps the chart's data range will automatically appear as a shaded vertical band. No restart required.
+
 ## Running
 
 ### Quick Start (PowerShell)
@@ -205,6 +228,7 @@ ER_CHAI/
 │   │   ├── fred_client.py       # FRED API client with retry
 │   │   ├── image_analyzer.py    # OpenCV + Vision (20-field comprehensive analysis)
 │   │   ├── ingestion.py         # Data pipeline (URL, file, long-format pivot, categorical detection)
+│   │   ├── recession_bands.py   # NBER recession periods + auto vertical-band generation
 │   │   ├── project_store.py     # SQLite CRUD
 │   │   └── summary_generator.py # Executive summary generation
 │   └── main.py                  # FastAPI app with Bedrock health check
@@ -217,6 +241,7 @@ ER_CHAI/
 │   │   ├── ChartPreviewOverlay.tsx  # Chart style selection carousel
 │   │   ├── ControlsPanel.tsx    # Full controls sidebar with all chart options
 │   │   ├── ContextMenu.tsx      # Right-click menu with rename, delete, hide, series chart type conversion
+│   │   ├── ColorPaletteDropdown.tsx # Color palette selector dropdown
 │   │   ├── ExportToolbar.tsx    # Python/R/PDF download buttons
 │   │   ├── ProjectList.tsx      # Save/load/delete with dataset reload
 │   │   └── SummaryEditor.tsx    # Editable summary with AI generation
@@ -227,6 +252,7 @@ ER_CHAI/
 │   └── types/index.ts           # TypeScript interfaces
 ├── tests/                       # 255 tests (unit + property-based)
 ├── config.yaml.example
+├── recession_config.yaml        # User-editable recession periods for chart shading
 ├── start-servers.ps1
 └── stop-servers.ps1
 ```

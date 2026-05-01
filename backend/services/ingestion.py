@@ -35,6 +35,7 @@ from backend.models.schemas import (
 )
 from backend.services.fred_client import FREDClient
 from backend.services.image_analyzer import ImageAnalyzer
+from backend.services.recession_bands import build_recession_annotations
 
 # ---------------------------------------------------------------------------
 # Constants – FRBSF default branding
@@ -53,12 +54,13 @@ FRBSF_COLORS = [
 ]
 
 FRBSF_FONT_FAMILY = "Arial"
-FRBSF_TITLE_FONT_SIZE = 16
-FRBSF_AXIS_FONT_SIZE = 12
-FRBSF_LEGEND_FONT_SIZE = 11
+FRBSF_TITLE_FONT_SIZE = 18
+FRBSF_AXIS_FONT_SIZE = 14
+FRBSF_LEGEND_FONT_SIZE = 14
 FRBSF_TITLE_COLOR = "#003B5C"
 FRBSF_TEXT_COLOR = "#333333"
 FRBSF_GRIDLINE_COLOR = "#D1D3D4"
+FRBSF_DEFAULT_LINE_WIDTH = 4.0
 
 
 # ---------------------------------------------------------------------------
@@ -330,7 +332,7 @@ def _build_default_chart_state(
             column="value",
             chart_type="line",
             color=primary_color,
-            line_width=2.0,
+            line_width=FRBSF_DEFAULT_LINE_WIDTH,
             visible=True,
         )
     ]
@@ -363,6 +365,9 @@ def _build_default_chart_state(
         "y_axis_label": Position(x=10, y=250),
     }
 
+    # Add recession shading bands if data has a date range
+    recession_annotations = build_recession_annotations(df) if df is not None else []
+
     return ChartState(
         chart_type="line",
         title=title,
@@ -370,7 +375,7 @@ def _build_default_chart_state(
         series=series,
         legend=legend,
         gridlines=gridlines,
-        annotations=[],
+        annotations=recession_annotations,
         data_table=None,
         elements_positions=elements_positions,
         dataset_path=dataset_path,
@@ -612,7 +617,7 @@ def _build_chart_state_from_df(
                 column=col,
                 chart_type="line",
                 color=color,
-                line_width=2.0,
+                line_width=FRBSF_DEFAULT_LINE_WIDTH,
                 visible=True,
             )
         )
@@ -628,7 +633,7 @@ def _build_chart_state_from_df(
                 column=columns[0],
                 chart_type="line",
                 color=FRBSF_COLORS[0],
-                line_width=2.0,
+                line_width=FRBSF_DEFAULT_LINE_WIDTH,
                 visible=True,
             )
         )
@@ -677,9 +682,12 @@ def _build_chart_state_from_df(
         visible=True,
         position=Position(x=70, y=490),
         columns=numeric_cols,
-        font_size=10,
+        font_size=14,
         max_rows=5,
     )
+
+    # Add recession shading bands if data has a date range
+    recession_annotations = build_recession_annotations(df)
 
     return ChartState(
         chart_type="line",
@@ -688,7 +696,7 @@ def _build_chart_state_from_df(
         series=series,
         legend=legend,
         gridlines=gridlines,
-        annotations=[],
+        annotations=recession_annotations,
         data_table=data_table,
         elements_positions=elements_positions,
         dataset_path=dataset_path,
@@ -730,7 +738,7 @@ def _build_categorical_chart_state(
                 column=group_name,
                 chart_type="bar",
                 color=color,
-                line_width=2.0,
+                line_width=FRBSF_DEFAULT_LINE_WIDTH,
                 visible=True,
             )
         )
@@ -913,12 +921,12 @@ def _apply_image_spec_to_chart_state(
                     type="horizontal_line",
                     text=hl.get("label", ""),
                     position=Position(x=0, y=0),
-                    font_size=10,
+                    font_size=14,
                     font_color=hl.get("color", "#cc0000"),
                     line_value=hl.get("value"),
                     line_color=hl.get("color", "#cc0000"),
                     line_style=hl.get("style", "dotted"),
-                    line_width=1.5,
+                    line_width=2.5,
                 ))
 
         # Vertical bands from Vision
@@ -929,7 +937,7 @@ def _apply_image_spec_to_chart_state(
                     type="vertical_band",
                     text=None,
                     position=Position(x=200 + i * 80, y=0),
-                    font_size=10,
+                    font_size=14,
                     font_color="#333333",
                     band_start=vb.get("start"),
                     band_end=vb.get("end"),
@@ -1017,7 +1025,7 @@ def _apply_image_spec_to_chart_state(
             visible=True,
             position=Position(x=70, y=490),
             columns=numeric_only_cols,
-            font_size=10,
+            font_size=14,
             max_rows=5,
         )
 

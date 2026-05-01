@@ -81,7 +81,7 @@ class LegendEntry(BaseModel):
     label: str
     color: str
     series_name: str
-    font_size: int = 11
+    font_size: int = 14
     font_color: str = "#333333"
     font_family: str = "Arial"
 
@@ -90,7 +90,7 @@ class AnnotationSpec(BaseModel):
     text: str
     x: float
     y: float
-    font_size: int = 10
+    font_size: int = 14
     font_color: str = "#333333"
 
 
@@ -200,9 +200,9 @@ class AxesConfig(BaseModel):
     x_scale: str = "linear"  # "linear" | "logarithmic"
     y_scale: str = "linear"
     y_format: str = "auto"  # "auto" | "integer" | "percent" | "decimal1" | "decimal2"
-    line_width: float = 1.0  # axis line thickness
-    tick_font_size: int = 10  # font size for tick labels
-    label_font_size: int = 12  # font size for axis labels
+    line_width: float = 2.0  # axis line thickness
+    tick_font_size: int = 14  # font size for tick labels
+    label_font_size: int = 14  # font size for axis labels
 
 
 class SeriesConfig(BaseModel):
@@ -210,7 +210,7 @@ class SeriesConfig(BaseModel):
     column: str
     chart_type: str  # "line" | "bar"
     color: str  # hex
-    line_width: float = 2.0
+    line_width: float = 4.0
     visible: bool = True
 
 
@@ -232,7 +232,7 @@ class AnnotationConfig(BaseModel):
     type: str  # "text" | "vertical_band" | "horizontal_line" | "vertical_line"
     text: str | None = None
     position: Position
-    font_size: int = 10
+    font_size: int = 14
     font_color: str = "#333333"
     band_start: str | None = None  # date for vertical bands
     band_end: str | None = None
@@ -240,14 +240,14 @@ class AnnotationConfig(BaseModel):
     line_value: float | str | None = None  # y-value for horizontal_line, or date string for vertical_line
     line_color: str = "#cc0000"  # color for horizontal_line
     line_style: str = "dotted"  # "solid" | "dashed" | "dotted"
-    line_width: float = 1.5
+    line_width: float = 2.5
 
 
 class DataTableConfig(BaseModel):
     visible: bool = False
     position: Position
     columns: list[str]
-    font_size: int = 10
+    font_size: int = 14
     max_rows: int = 5
     col_width: float = 70.0  # width per date/computed column
     row_height: float = 22.0  # height per data row
